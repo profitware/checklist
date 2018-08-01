@@ -17,6 +17,8 @@
    [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
    (page/include-css "/css/patternfly.min.css")
    (page/include-css "/css/patternfly-additions.min.css")
+   (page/include-css "/css/codemirror.css")
+   (page/include-css "/css/monokai.css")
    [:style (str "html {" \newline
                 "  overflow-y: scroll;" \newline
                 "}" \newline
@@ -52,8 +54,14 @@
 
 
 (defn get-script [page-name]
-  [:script (str "$(function () {"
-                "});")])
+  (when (= page-name page-schedule)
+    [:script (str "$(function () {"
+                  "  var scheduleCodeMirror = CodeMirror(document.getElementById('codemirror'), {"
+                  "    value: '(+ 1 2)',"
+                  "    theme: 'monokai'"
+                  "  });"
+                  "  parinferCodeMirror.init(scheduleCodeMirror);"
+                  "});")]))
 
 
 (defn get-contents-by-page [page-name]
@@ -94,9 +102,18 @@
                   :name "checkbox2"
                   :checked "checked"
                   :disabled "disabled"
-                  :class "form-control"}]]]
+                  :class "form-control"}]]]]]]]])
 
-]]]]])
+
+(defn get-editor []
+  [:div {:class "col-xs-12 col-sm-9"}
+   [:p {:class "pull-right visible-xs"}
+    [:button {:class "btn btn-primary btn-xs"
+              :type "button"
+              :data-toggle "offcanvas"}
+     "Toggle nav"]]
+
+   [:div {:id "codemirror"}]])
 
 
 (defn get-page [page-name auth]
@@ -134,11 +151,19 @@
 
                [:div {:class "container-fluid container-cards-pf"}
                 [:div {:class "row row-offcanvas row-offcanvas-right row-cards-pf"}
-                 (get-cards)
+                 (if (= page-name "schedule")
+                   (get-editor)
+                   (get-cards))
                  [:div {:id "sidebar"
                         :class "col-xs-6 col-sm-3 sidebar-offcanvas"}
                   [:p (str "Sidebar contents here.")]]]]
 
+               (when (= page-name page-schedule)
+                 [:div {:style "display: hidden;"}
+                  (page/include-js "/js/codemirror.js")
+                  (page/include-js "/js/parinfer.js")
+                  (page/include-js "/js/parinfer-codemirror.js")
+                  (page/include-js "/js/clojure.js")])
                (page/include-js "/js/jquery.min.js")
                (page/include-js "/js/bootstrap.min.js")
                (page/include-js "/js/patternfly.min.js")
@@ -166,7 +191,8 @@
 
 
 (def app (-> routes
-             (basic-authentication/wrap-basic-authentication auth-ok?)))
+             (basic-authentication/wrap-basic-authentication auth-ok?)
+             (reload/wrap-reload)))
 
 
 (defn main []
