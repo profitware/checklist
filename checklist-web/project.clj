@@ -8,7 +8,8 @@
             [lein-resource "16.9.1"]
             [lein-bump-version "0.1.6"]
             [arohner/lein-docker "0.1.4"]
-            [lein-cljsbuild "1.1.7"]]
+            [lein-cljsbuild "1.1.7"]
+            [checklist/checklist-core "0.1.0"]]
   :cljsbuild {:builds
               {:min {:source-paths ["src/cljs"]
                      :compiler {:output-to "resources/public/js/out/goog/app.js"

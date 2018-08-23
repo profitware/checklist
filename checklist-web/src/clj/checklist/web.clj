@@ -4,7 +4,8 @@
             [ring.adapter.jetty :as jetty]
             [ring.middleware.basic-authentication :as basic-authentication]
             [ring.middleware.reload :as reload]
-            [hiccup.page :as page]))
+            [hiccup.page :as page]
+            [checklist-core.core :as checklist]))
 
 
 (defn auth-ok? [user pass]
@@ -18,14 +19,17 @@
    (page/include-css "/css/patternfly.min.css")
    (page/include-css "/css/patternfly-additions.min.css")
    (page/include-css "/css/codemirror.css")
-   (page/include-css "/css/monokai.css")
+   (page/include-css "/css/mdn-like.css")
    [:style (str "html {" \newline
                 "  overflow-y: scroll;" \newline
                 "}" \newline
                 ".navbar {" \newline
                 "  margin-bottom: 0;" \newline
-                "}"
-                )]])
+                "}" \newline
+                ".CodeMirror {" \newline
+                "  border: 1px solid #eee;" \newline
+                "  height: auto;" \newline
+                "}")]])
 
 
 (defmacro menu [page-name page-title & page-href]
@@ -55,13 +59,18 @@
 
 (defn get-script [page-name]
   (when (= page-name page-schedule)
-    [:script (str "$(function () {"
-                  "  var scheduleCodeMirror = CodeMirror(document.getElementById('codemirror'), {"
-                  "    value: '(+ 1 2)',"
-                  "    theme: 'monokai'"
-                  "  });"
-                  "  parinferCodeMirror.init(scheduleCodeMirror);"
-                  "});")]))
+    (let [schedule (checklist/get-default-data)
+          schedule-string (str schedule)]
+      [:script (str "$(function () {"
+                    "  var scheduleCodeMirror = CodeMirror(document.getElementById('codemirror'), {"
+                    "    value: '" schedule "',"
+                    "    theme: 'mdn-like',"
+                    "    lineNumbers: true,"
+                    "    styleActiveLine: true,"
+                    "    matchBrackets: true"
+                    "  });"
+                    "  parinferCodeMirror.init(scheduleCodeMirror);"
+                    "});")])))
 
 
 (defn get-contents-by-page [page-name]
