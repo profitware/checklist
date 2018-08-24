@@ -3,6 +3,10 @@
   :url "http://github.com/profitware/checklist"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :dependencies [[org.clojure/clojure "1.9.0"]]
+  :plugins [[lein-cljfmt "0.6.0"]]
+  :dependencies [[org.clojure/clojure "1.9.0"]
+                 [cljfmt "0.6.0"]
+                 [factual/timely "0.0.3"]]
   :target-path "target/%s"
+  :main ^:skip-aot checklist-core.core
   :profiles {:uberjar {:aot :all}})
