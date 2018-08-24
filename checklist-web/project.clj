@@ -9,6 +9,7 @@
             [lein-bump-version "0.1.6"]
             [arohner/lein-docker "0.1.4"]
             [lein-cljsbuild "1.1.7"]
+            [lein-cljfmt "0.6.0"]
             [checklist/checklist-core "0.1.0"]]
   :cljsbuild {:builds
               {:min {:source-paths ["src/cljs"]
@@ -32,7 +33,9 @@
                  [ring-basic-authentication "1.0.5"]
                  [http-kit "2.2.0"]
                  [compojure "1.6.1"]
-                 [hiccup "1.0.5"]]
+                 [hiccup "1.0.5"]
+                 [cljfmt "0.6.0"]
+                 [factual/timely "0.0.3"]]
   :source-paths ["src/clj" "src/cljs"]
   :npm {:dependencies [[patternfly "3.48.2"]
                        [bootstrap "3.3.7"]

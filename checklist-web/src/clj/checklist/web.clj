@@ -5,7 +5,8 @@
             [ring.middleware.basic-authentication :as basic-authentication]
             [ring.middleware.reload :as reload]
             [hiccup.page :as page]
-            [checklist-core.core :as checklist]))
+            [checklist-core.core :as checklist])
+  (:gen-class))
 
 
 (defn auth-ok? [user pass]
@@ -25,6 +26,10 @@
                 "}" \newline
                 ".navbar {" \newline
                 "  margin-bottom: 0;" \newline
+                "}" \newline
+                ".card-disabled {" \newline
+                "  opacity: 0.2;" \newline
+                "  color: #aaaaaa;" \newline
                 "}" \newline
                 ".CodeMirror {" \newline
                 "  border: 1px solid #eee;" \newline
@@ -47,71 +52,88 @@
 (defn get-menu [page-name]
   [:ul {:class "nav navbar-nav navbar-primary"}
    (menu page-today "Today" "/")
-   [:li {:class "dropdown"}
-    [:a {:href "#0"
-         :class "dropdown-toggle"
-         :data-toggle "dropdown"}
-     "Settings"
-     [:b {:class "caret"}]]
-    [:ul {:class "dropdown-menu"}
-     (menu page-schedule "Schedule")]]])
+   (menu page-schedule "Schedule")
+   (comment [:li {:class "dropdown"}
+             [:a {:href "#0"
+                  :class "dropdown-toggle"
+                  :data-toggle "dropdown"}
+              "Settings"
+              [:b {:class "caret"}]]
+             [:ul {:class "dropdown-menu"}]])])
 
 
-(defn get-script [page-name]
-  (when (= page-name page-schedule)
-    (let [schedule (checklist/get-default-data)
-          schedule-string (str schedule)]
-      [:script (str "$(function () {"
-                    "  var scheduleCodeMirror = CodeMirror(document.getElementById('codemirror'), {"
-                    "    value: '" schedule "',"
-                    "    theme: 'mdn-like',"
-                    "    lineNumbers: true,"
-                    "    styleActiveLine: true,"
-                    "    matchBrackets: true"
-                    "  });"
-                    "  parinferCodeMirror.init(scheduleCodeMirror);"
-                    "});")])))
+(defn get-script [page-name auth]
+  [:script (str (when (= page-name page-schedule)
+                  (let [schedule (checklist/get-data-string {:page-name page-name
+                                                             :auth auth})]
+                    (str "$(function () {"
+                         "  var scheduleCodeMirror = CodeMirror(document.getElementById('codemirror'), {"
+                         "    value: `" schedule "`,"
+                         "    theme: 'mdn-like',"
+                         "    lineNumbers: true,"
+                         "    styleActiveLine: true,"
+                         "    matchBrackets: true"
+                         "  });"
+                         "  parinferCodeMirror.init(scheduleCodeMirror);"
+                         "});")))
+                (str "$(function () {"
+                     "  var checkbox_selector = 'input[type=\"checkbox\"]';"
+                     "  $(checkbox_selector).click(function () {"
+                     "    var $card_pf = $(this).closest('.card-pf');"
+                     "    if ($card_pf.find(checkbox_selector + ':checked').length == $card_pf.find(checkbox_selector).length) {"
+                     "      $card_pf.addClass('card-disabled');"
+                     "    } else {"
+                     "      $card_pf.removeClass('card-disabled');"
+                     "    }"
+                     "  });"
+                     "});"))])
 
 
 (defn get-contents-by-page [page-name]
   "Hello, world! This is a test!")
 
 
-(defn get-cards []
+(defn get-checkbox [checkbox-id checkbox-title checkbox-checked checkbox-disabled]
+  [:div {:class "form-group"}
+   [:label {:class "col-sm-9 control-label"
+            :for checkbox-id}
+    checkbox-title]
+   [:div {:class "col-sm-3"}
+    [:input (into {:type "checkbox"
+                   :id checkbox-id
+                   :name checkbox-id
+                   :class "form-control"}
+                  [(when checkbox-checked
+                     [:checked "checked"])
+                   (when checkbox-disabled
+                     [:disabled "disabled"])])]]])
+
+
+(defn get-cards [cards]
   [:div {:class "col-xs-12 col-sm-9"}
    [:p {:class "pull-right visible-xs"}
     [:button {:class "btn btn-primary btn-xs"
               :type "button"
               :data-toggle "offcanvas"}
      "Toggle nav"]]
-
-   [:div {:class "col-xs-6 col-sm-4 col-md-4"}
-    [:div {:class "card-pf"}
-     [:h2 {:class "card-pf-title"}
-      "Some Checklist"]
-     [:div {:class "card-pf-body"}
-      [:form {:class "form-horizontal"}
-       [:div {:class "form-group"}
-        [:label {:class "col-sm-9 control-label"
-                 :for "checkbox1"}
-         "Hello! This is a test!"]
-        [:div {:class "col-sm-3"}
-         [:input {:type "checkbox"
-                  :id "checkbox1"
-                  :name "checkbox1"
-                  :class "form-control"}]]]
-
-       [:div {:class "form-group"}
-        [:label {:class "col-sm-9 control-label"
-                 :for "checkbox2"}
-         "Wow!"]
-        [:div {:class "col-sm-3"}
-         [:input {:type "checkbox"
-                  :id "checkbox2"
-                  :name "checkbox2"
-                  :checked "checked"
-                  :disabled "disabled"
-                  :class "form-control"}]]]]]]]])
+   (for [{card-title :card-title
+          card-checkboxes :card-checkboxes} cards]
+     [:div {:class "col-xs-6 col-sm-4 col-md-4"}
+      [:div {:class (str "card-pf"
+                         (when (reduce (fn [acc checkbox]
+                                         (and acc (get checkbox :checkbox-checked)))
+                                       true
+                                       card-checkboxes)
+                           " card-disabled"))}
+       [:h2 {:class "card-pf-title"}
+        card-title]
+       [:div {:class "card-pf-body"}
+        [:form {:class "form-horizontal"}
+         (for [{checkbox-id :checkbox-id
+                checkbox-title :checkbox-title
+                checkbox-checked :checkbox-checked
+                checkbox-disabled :checkbox-disabled} card-checkboxes]
+           (get-checkbox checkbox-id checkbox-title checkbox-checked checkbox-disabled))]]]])])
 
 
 (defn get-editor []
@@ -162,7 +184,8 @@
                 [:div {:class "row row-offcanvas row-offcanvas-right row-cards-pf"}
                  (if (= page-name "schedule")
                    (get-editor)
-                   (get-cards))
+                   (get-cards (checklist/get-cards-for-query {:page-name page-name
+                                                              :auth auth})))
                  [:div {:id "sidebar"
                         :class "col-xs-6 col-sm-3 sidebar-offcanvas"}
                   [:p (str "Sidebar contents here.")]]]]
@@ -177,7 +200,7 @@
                (page/include-js "/js/bootstrap.min.js")
                (page/include-js "/js/patternfly.min.js")
                (page/include-js "/js/patternfly-functions.min.js")
-               (get-script page-name)]))
+               (get-script page-name auth)]))
 
 
 (defmacro get-routes [page-name & url]
