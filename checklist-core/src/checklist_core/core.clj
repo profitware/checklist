@@ -1,6 +1,7 @@
 (ns checklist-core.core
   (:require [cljfmt.core]
             [clj-time.core :as dates]
+            [checklist-core.spec]
             [timely.core :refer [each-minute
                                  hourly
                                  daily
@@ -32,31 +33,23 @@
 
 
 (def data-string (atom nil))
-(def cards-for-query (atom [{:card-title "Some Card"
-                             :card-checkboxes [{:checkbox-id "checkbox1"
-                                                :checkbox-title "Hello"}]}
-                            {:card-title "Well"}
-                            {:card-title "This"}
-                            {:card-title "escalated"
-                             :card-checkboxes [{:checkbox-id "checkbox2"
-                                                :checkbox-title "Wow"
-                                                :checkbox-checked true}
-                                               {:checkbox-id "checkbox3"
-                                                :checkbox-title "Test"}]}
-                            {:card-title "quickly"}]))
-
 
 (defn get-default-data-string []
-  (str "(def day-start \"0 0 * * *\")" \newline
-       "(def day-end \"59 23 * * *\")" \newline
-       \newline
-       "(def y \"test\")"))
+  (str "(defcard sample-card \"Sample Card\"" \newline
+       "  (checkbox \"Hello, world\")" \newline
+       "  (auto \"This is a test!\" true))" \newline))
+
+
+(def cards-for-query (atom (checklist-core.spec/evaluate-expr (get-default-data-string))))
 
 
 (defn get-data-string [query]
   (cljfmt.core/reformat-string (or @data-string
                                    (get-default-data-string))))
 
+
+(defn apply-data-string [query new-data-string]
+  (reset! data-string new-data-string))
 
 
 (defn check-schedule [{:keys [schedule work]}]

@@ -6,7 +6,9 @@
   :plugins [[lein-cljfmt "0.6.0"]]
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [cljfmt "0.6.0"]
-                 [factual/timely "0.0.3"]]
+                 [factual/timely "0.0.3"]
+                 [org.clojure/tools.namespace "0.2.11"]]
   :target-path "target/%s"
   :main ^:skip-aot checklist-core.core
-  :profiles {:uberjar {:aot :all}})
+  :profiles {:uberjar {:aot :all}
+             :dev {:dependencies [[org.clojure/test.check "0.9.0"]]}})
