@@ -49,7 +49,7 @@
 (defmacro defcard [card-id card-title & checkboxes]
   {:card-id (str card-id)
    :card-title card-title
-   :card-checkboxes `[~@checkboxes]})
+   :card-checkboxes (set `[~@checkboxes])})
 
 
 (s/fdef defcard
