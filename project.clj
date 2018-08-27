@@ -10,8 +10,8 @@
   :aliases {"test" ["sub" "lint-and-test-all"]
             "bump-all" ["do" ["bump-version"] ["sub" "bump-version"]]
             "deploy-all" ["do" ["sub" "deploy" "clojars"] ["deploy" "clojars"]]}
-  :sub ["checklist-web"
-        "checklist-core"]
+  :sub ["checklist-core"
+        "checklist-web"]
   :profiles {:1.7 {:dependencies [[org.clojure/clojure "1.7.0"]]}
              :1.8 {:dependencies [[org.clojure/clojure "1.8.0"]]}
              :dev {:dependencies [[org.clojure/tools.namespace "0.2.11"]]}})

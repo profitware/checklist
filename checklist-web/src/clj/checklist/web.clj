@@ -4,8 +4,10 @@
             [ring.adapter.jetty :as jetty]
             [ring.middleware.basic-authentication :as basic-authentication]
             [ring.middleware.reload :as reload]
+            [ring.middleware.json :as json]
+            [ring.util.response :as response]
             [hiccup.page :as page]
-            [checklist-core.core :as checklist])
+            [checklist.core :as checklist])
   (:gen-class))
 
 
@@ -79,12 +81,42 @@
                 (str "$(function () {"
                      "  var checkbox_selector = 'input[type=\"checkbox\"]';"
                      "  $(checkbox_selector).click(function () {"
-                     "    var $card_pf = $(this).closest('.card-pf');"
-                     "    if ($card_pf.find(checkbox_selector + ':checked').length == $card_pf.find(checkbox_selector).length) {"
-                     "      $card_pf.addClass('card-disabled');"
-                     "    } else {"
-                     "      $card_pf.removeClass('card-disabled');"
-                     "    }"
+                     "    var $card_pf = $(this).closest('.card-pf'),"
+                     "        card_id = $card_pf.attr('id'),"
+                     "        payload = {"
+                     "          'card-id': card_id,"
+                     "          'checked': $card_pf.find(checkbox_selector + ':checked').map(function (i, el) {"
+                     "            return $(this).attr('name');"
+                     "          }).get()"
+                     "        };"
+                     "    $.ajax({"
+                     "      type: 'POST',"
+                     "      url: '" page-name "/ajax',"
+                     "      data: JSON.stringify(payload),"
+                     "      contentType: 'application/json'"
+                     "    }).done(function (data) {"
+                     "      var cards = data.cards,"
+                     "          checked_count = 0;"
+                     "      if (cards) {"
+                     "        $(cards).each(function () {"
+                     "          if (this['card-id'] == card_id) {"
+                     "            $(this['card-checkboxes']).each(function () {"
+                     "              var checked_this = this['checkbox-checked'];"
+                     "              if (checked_this) {"
+                     "                checked_count += 1;"
+                     "              }"
+                     "              $card_pf.find(checkbox_selector + '#' + this['checkbox-id'])"
+                     "                      .attr('checked', checked_this ? 'checked' : undefined);"
+                     "            });"
+                     "          }"
+                     "        });"
+                     "      }"
+                     "      if (checked_count == $card_pf.find(checkbox_selector).length) {"
+                     "        $card_pf.addClass('card-disabled');"
+                     "      } else {"
+                     "        $card_pf.removeClass('card-disabled');"
+                     "      }"
+                     "    });"
                      "  });"
                      "});"))])
 
@@ -116,7 +148,8 @@
               :type "button"
               :data-toggle "offcanvas"}
      "Toggle nav"]]
-   (for [{card-title :card-title
+   (for [{card-id :card-id
+          card-title :card-title
           card-checkboxes :card-checkboxes} cards]
      [:div {:class "col-xs-6 col-sm-4 col-md-4"}
       [:div {:class (str "card-pf"
@@ -124,7 +157,8 @@
                                          (and acc (get checkbox :checkbox-checked)))
                                        true
                                        card-checkboxes)
-                           " card-disabled"))}
+                           " card-disabled"))
+             :id card-id}
        [:h2 {:class "card-pf-title"}
         card-title]
        [:div {:class "card-pf-body"}
@@ -145,6 +179,24 @@
      "Toggle nav"]]
 
    [:div {:id "codemirror"}]])
+
+
+(defn get-sidebar [page-name auth]
+  [:div {:id "sidebar"
+         :class "col-xs-6 col-sm-3 sidebar-offcanvas"}
+   [:p (str "Press the button below to run or re-run the job. "
+            "Once the job is finished, the contents on the left would be updated.")]
+   [:button {:class "btn btn-primary get-contents"
+             :type "button"}
+    "Update Cards"]
+   (comment [:button {:class "btn btn-primary"
+                      :type "button"
+                      :disabled "disabled"}
+             "Not Permitted"])
+   [:p {:class "loading-contents"
+        :style "display: none;"}
+    [:span {:class "spinner spinner-xs spinner-inline"}]
+    "\nWait while job is running"]])
 
 
 (defn get-page [page-name auth]
@@ -186,9 +238,7 @@
                    (get-editor)
                    (get-cards (checklist/get-cards-for-query {:page-name page-name
                                                               :auth auth})))
-                 [:div {:id "sidebar"
-                        :class "col-xs-6 col-sm-3 sidebar-offcanvas"}
-                  [:p (str "Sidebar contents here.")]]]]
+                 (get-sidebar page-name auth)]]
 
                (when (= page-name page-schedule)
                  [:div {:style "display: hidden;"}
@@ -203,12 +253,41 @@
                (get-script page-name auth)]))
 
 
+(defn get-ajax [page-name request]
+  (response/response {:hello 1}))
+
+
+(defn post-ajax [page-name request]
+  (let [{card :body} request
+        {checked-ids :checked} card
+        old-cards (checklist/get-cards-for-query {:page-name page-name
+                                                  :auth true})
+        
+        old-card (first (filter #(= (:card-id %)
+                                    (:card-id card))
+                                old-cards))]
+    (if old-card
+      (let [new-card (assoc old-card
+                            :card-checkboxes (reduce (fn [acc old-checkbox]
+                                                       (conj acc (if (:disabled old-checkbox)
+                                                                   old-checkbox
+                                                                   (assoc old-checkbox
+                                                                          :checkbox-checked (.contains checked-ids
+                                                                                                       (:checkbox-id old-checkbox))))))
+                                                     []
+                                                     (:card-checkboxes old-card)))]
+        (checklist/show-card-for-query! {} new-card)
+        (response/response {:cards [new-card]}))
+      (response/response {:cards []}))))
+
+
 (defmacro get-routes [page-name & url]
   (let [web-url (or (first url)
                     (str "/" page-name))
         page-symbol (symbol (str "page-" page-name))]
     `(list (compojure/GET ~web-url request# (get-page ~page-symbol (get request# :basic-authentication)))
-           (compojure/GET (str "/" ~page-name "/ajax") request# (get-page ~page-symbol (get request# :basic-authentication))))))
+           (compojure/GET (str "/" ~page-name "/ajax") request# (get-ajax ~page-symbol request#))
+           (compojure/POST (str "/" ~page-name "/ajax") request# (post-ajax ~page-symbol request#)))))
 
 
 (defmacro get-all-routes []
@@ -223,6 +302,8 @@
 
 
 (def app (-> routes
+             (json/wrap-json-response)
+             (json/wrap-json-body {:keywords? true :bigdecimals? true})
              (basic-authentication/wrap-basic-authentication auth-ok?)
              (reload/wrap-reload)))
 

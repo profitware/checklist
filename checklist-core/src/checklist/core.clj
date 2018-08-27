@@ -1,7 +1,7 @@
-(ns checklist-core.core
+(ns checklist.core
   (:require [cljfmt.core]
             [clj-time.core :as dates]
-            [checklist-core.spec]
+            [checklist.spec]
             [timely.core :refer [each-minute
                                  hourly
                                  daily
@@ -40,7 +40,7 @@
        "  (auto \"This is a test!\" true))" \newline))
 
 
-(def cards-for-query (atom (checklist-core.spec/evaluate-expr (get-default-data-string))))
+(def cards-for-query (atom (checklist.spec/evaluate-expr (get-default-data-string))))
 
 
 (defn get-data-string [query]

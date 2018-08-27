@@ -1,4 +1,4 @@
-(ns checklist-core.spec
+(ns checklist.spec
   (:require [clojure.spec.alpha :as s]))
 
 
@@ -49,7 +49,7 @@
 (defmacro defcard [card-id card-title & checkboxes]
   {:card-id (str card-id)
    :card-title card-title
-   :card-checkboxes (set `[~@checkboxes])})
+   :card-checkboxes (distinct `(list ~@checkboxes))})
 
 
 (s/fdef defcard
@@ -71,5 +71,5 @@
 (defn evaluate-expr [evaluation-string]
   (let [expr (read-string (str "[" evaluation-string "]"))]
     (when (s/valid? ::evaluation expr)
-      (binding [*ns* (find-ns 'checklist-core.spec)]
+      (binding [*ns* (find-ns 'checklist.spec)]
         (eval (s/conform ::evaluation expr))))))

@@ -9,6 +9,6 @@
                  [factual/timely "0.0.3"]
                  [org.clojure/tools.namespace "0.2.11"]]
   :target-path "target/%s"
-  :main ^:skip-aot checklist-core.core
+  :main ^:skip-aot checklist.core
   :profiles {:uberjar {:aot :all}
              :dev {:dependencies [[org.clojure/test.check "0.9.0"]]}})

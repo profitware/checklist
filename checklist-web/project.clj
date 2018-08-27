@@ -30,6 +30,7 @@
                  [org.clojure/data.codec "0.1.0"]
                  [ring/ring-jetty-adapter "1.6.3"]
                  [ring/ring-devel "1.6.3"]
+                 [ring/ring-json "0.4.0"]
                  [ring-basic-authentication "1.0.5"]
                  [http-kit "2.2.0"]
                  [compojure "1.6.1"]
