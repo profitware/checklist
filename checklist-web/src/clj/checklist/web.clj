@@ -7,7 +7,9 @@
             [ring.middleware.json :as json]
             [ring.util.response :as response]
             [hiccup.page :as page]
-            [checklist.core :as checklist])
+            [checklist.core :as checklist]
+            [checklist.cards-spec :as cards-spec]
+            [checklist.schedule-spec :as schedule-spec])
   (:gen-class))
 
 
@@ -48,12 +50,14 @@
 
 
 (def page-today "today")
+(def page-cards "cards")
 (def page-schedule "schedule")
 
 
 (defn get-menu [page-name]
   [:ul {:class "nav navbar-nav navbar-primary"}
    (menu page-today "Today" "/")
+   (menu page-cards "Cards")
    (menu page-schedule "Schedule")
    (comment [:li {:class "dropdown"}
              [:a {:href "#0"
@@ -65,18 +69,41 @@
 
 
 (defn get-script [page-name auth]
-  [:script (str (when (= page-name page-schedule)
-                  (let [schedule (checklist/get-data-string {:page-name page-name
-                                                             :auth auth})]
+  [:script (str (when (= (.contains [page-cards page-schedule]
+                                    page-name))
+                  (let [content (if (= page-name page-cards)
+                                  (checklist/get-cards-string {:page-name page-name
+                                                               :auth auth})
+                                  (checklist/get-schedule-string {:page-name page-name
+                                                                  :auth auth}))]
                     (str "$(function () {"
-                         "  var scheduleCodeMirror = CodeMirror(document.getElementById('codemirror'), {"
-                         "    value: `" schedule "`,"
+                         "  var contentCodeMirror = CodeMirror(document.getElementById('codemirror'), {"
+                         "    value: `" content "`,"
                          "    theme: 'mdn-like',"
                          "    lineNumbers: true,"
                          "    styleActiveLine: true,"
                          "    matchBrackets: true"
                          "  });"
-                         "  parinferCodeMirror.init(scheduleCodeMirror);"
+                         "  parinferCodeMirror.init(contentCodeMirror);"
+                         "  $('button.close').click(function () { $(this).closest('.alert').hide(); });"
+                         "  $('.action-button').click(function () {"
+                         "    var payload = {'" page-name "-code': contentCodeMirror.getValue()};"
+                         "    $('.alert-danger').hide();"
+                         "    $('.alert-success').hide();"
+                         "    $.ajax({"
+                         "      type: 'POST',"
+                         "      url: '" page-name "/ajax',"
+                         "      data: JSON.stringify(payload),"
+                         "      contentType: 'application/json'"
+                         "    }).done(function (data) {"
+                         "      if (data['" page-name "-code']) {"
+                         "        contentCodeMirror.getValue(data['" page-name  "-code']);"
+                         "        $('.alert-success').show();"
+                         "      } else if (data['error']) {"
+                         "        $('.alert-danger').show();"
+                         "      }"
+                         "    });"
+                         "  });"
                          "});")))
                 (str "$(function () {"
                      "  var checkbox_selector = 'input[type=\"checkbox\"]';"
@@ -170,7 +197,9 @@
            (get-checkbox checkbox-id checkbox-title checkbox-checked checkbox-disabled))]]]])])
 
 
-(defn get-editor []
+(defn get-editor [page-name]
+
+
   [:div {:class "col-xs-12 col-sm-9"}
    [:p {:class "pull-right visible-xs"}
     [:button {:class "btn btn-primary btn-xs"
@@ -178,21 +207,48 @@
               :data-toggle "offcanvas"}
      "Toggle nav"]]
 
+   (when (.contains [page-cards page-schedule]
+                    page-name)
+     [:div {:class "alert alert-danger alert-dismissable"
+            :style "display: none;"}
+      [:button {:type "button"
+                :class "close"
+                :aria-label "Close"}
+       [:span {:class "pficon pficon-close"}]]
+      [:span {:class "pficon pficon-error-circle-o"}]
+      [:strong "Error!"]
+      " Your syntax is wrong!"])
+
+   (when (.contains [page-cards page-schedule]
+                    page-name)
+     [:div {:class "alert alert-success alert-dismissable"
+            :style "display: none;"}
+      [:button {:type "button"
+                :class "close"
+                :aria-label "Close"}
+       [:span {:class "pficon pficon-close"}]]
+      [:span {:class "pficon pficon-ok"}]
+      [:strong "Success!"]
+      " Your cards are updated now!"])
+
    [:div {:id "codemirror"}]])
 
 
 (defn get-sidebar [page-name auth]
   [:div {:id "sidebar"
          :class "col-xs-6 col-sm-3 sidebar-offcanvas"}
-   [:p (str "Press the button below to run or re-run the job. "
-            "Once the job is finished, the contents on the left would be updated.")]
-   [:button {:class "btn btn-primary get-contents"
-             :type "button"}
-    "Update Cards"]
-   (comment [:button {:class "btn btn-primary"
-                      :type "button"
-                      :disabled "disabled"}
-             "Not Permitted"])
+   (when (.contains [page-cards page-schedule]
+                    page-name)
+     [:p (str "Press the button below to run or re-run the job. "
+                "Once the job is finished, the contents on the left would be updated.")])
+   (when (= page-name page-cards)
+     [:button {:class "btn btn-primary action-button"
+               :type "button"}
+      "Update Cards"])
+   (when (= page-name page-schedule)
+     [:button {:class "btn btn-primary action-button"
+               :type "button"}
+      "Update Schedule"])
    [:p {:class "loading-contents"
         :style "display: none;"}
     [:span {:class "spinner spinner-xs spinner-inline"}]
@@ -234,13 +290,15 @@
 
                [:div {:class "container-fluid container-cards-pf"}
                 [:div {:class "row row-offcanvas row-offcanvas-right row-cards-pf"}
-                 (if (= page-name "schedule")
-                   (get-editor)
+                 (if (.contains [page-cards page-schedule]
+                                page-name)
+                   (get-editor page-name)
                    (get-cards (checklist/get-cards-for-query {:page-name page-name
                                                               :auth auth})))
                  (get-sidebar page-name auth)]]
 
-               (when (= page-name page-schedule)
+               (when (.contains [page-cards page-schedule]
+                                page-name)
                  [:div {:style "display: hidden;"}
                   (page/include-js "/js/codemirror.js")
                   (page/include-js "/js/parinfer.js")
@@ -258,27 +316,41 @@
 
 
 (defn post-ajax [page-name request]
-  (let [{card :body} request
-        {checked-ids :checked} card
-        old-cards (checklist/get-cards-for-query {:page-name page-name
-                                                  :auth true})
-        
-        old-card (first (filter #(= (:card-id %)
-                                    (:card-id card))
-                                old-cards))]
-    (if old-card
-      (let [new-card (assoc old-card
-                            :card-checkboxes (reduce (fn [acc old-checkbox]
-                                                       (conj acc (if (:disabled old-checkbox)
-                                                                   old-checkbox
-                                                                   (assoc old-checkbox
-                                                                          :checkbox-checked (.contains checked-ids
-                                                                                                       (:checkbox-id old-checkbox))))))
-                                                     []
-                                                     (:card-checkboxes old-card)))]
-        (checklist/show-card-for-query! {} new-card)
-        (response/response {:cards [new-card]}))
-      (response/response {:cards []}))))
+  (cond
+    (= page-name page-cards) (let [{input-json :body} request
+                                   cards-code (:cards-code input-json)]
+                               (if-let [cards-expr (cards-spec/evaluate-expr cards-code)]
+                                 (let [formatted-string (checklist/apply-cards-string! {} cards-code)]
+                                   (response/response {:cards-code formatted-string}))
+                                 (response/response {:error "Cannot evaluate expression"})))
+    (= page-name page-schedule) (let [{input-json :body} request
+                                      schedule-code (:schedule-code input-json)]
+                                  (if-let [schedule-expr (schedule-spec/evaluate-expr schedule-code)]
+                                    (let [formatted-string (checklist/apply-schedule-string! {} schedule-code)]
+                                      (response/response {:schedule-code formatted-string}))
+                                    (response/response {:error "Cannot evaluate expression"})))
+    :else (let [{input-json :body} request
+                card input-json
+                {checked-ids :checked} card
+                old-cards (checklist/get-cards-for-query {:page-name page-name
+                                                          :auth true})
+                
+                old-card (first (filter #(= (:card-id %)
+                                            (:card-id card))
+                                        old-cards))]
+            (if old-card
+              (let [new-card (assoc old-card
+                                    :card-checkboxes (reduce (fn [acc old-checkbox]
+                                                               (conj acc (if (:disabled old-checkbox)
+                                                                           old-checkbox
+                                                                           (assoc old-checkbox
+                                                                                  :checkbox-checked (.contains checked-ids
+                                                                                                               (:checkbox-id old-checkbox))))))
+                                                             []
+                                                             (:card-checkboxes old-card)))]
+                (checklist/show-card-for-query! {} new-card)
+                (response/response {:cards [new-card]}))
+              (response/response {:cards []})))))
 
 
 (defmacro get-routes [page-name & url]
@@ -293,6 +365,7 @@
 (defmacro get-all-routes []
   `(compojure/defroutes routes
      ~@(get-routes "today" "/")
+     ~@(get-routes "cards")
      ~@(get-routes "schedule")
      (route/resources "/")
      (route/not-found "<h1>Not found</h1>")))

@@ -1,66 +1,52 @@
 (ns checklist.core
   (:require [cljfmt.core]
             [clj-time.core :as dates]
-            [checklist.spec]
-            [timely.core :refer [each-minute
-                                 hourly
-                                 daily
-                                 weekly
-                                 monthly
-                                 on-days
-                                 on-months
-                                 on-days-of-week
-                                 create-interval
-                                 each
-                                 every
-                                 on
-                                 at
-                                 in-range
-                                 am
-                                 pm
-                                 hour
-                                 minute
-                                 day
-                                 month
-                                 day-of-week
-                                 start-time
-                                 end-time
-                                 time-to-cron
-                                 schedule-to-cron
-                                 scheduled-item
-                                 to-date-obj]])
+            [checklist.cards-spec :as cards-spec]
+            [checklist.schedule-spec :as schedule-spec])
   (:gen-class))
 
 
-(def data-string (atom nil))
+(def cards-string (atom nil))
 
-(defn get-default-data-string []
+(defn get-default-cards-string []
   (str "(defcard sample-card \"Sample Card\"" \newline
        "  (checkbox \"Hello, world\")" \newline
        "  (auto \"This is a test!\" true))" \newline))
 
 
-(def cards-for-query (atom (checklist.spec/evaluate-expr (get-default-data-string))))
+(def schedule-string (atom nil))
+
+(defn get-default-schedule-string []
+  (str "(reset sample-card (each-minute))"))
 
 
-(defn get-data-string [query]
-  (cljfmt.core/reformat-string (or @data-string
-                                   (get-default-data-string))))
+(def cards-for-query (atom (cards-spec/evaluate-expr (get-default-cards-string))))
+
+(def schedule-for-query (atom (schedule-spec/evaluate-expr (get-default-schedule-string))))
 
 
-(defn apply-data-string [query new-data-string]
-  (reset! data-string new-data-string))
+(defn get-cards-string [query]
+  (or @cards-string
+      (get-default-cards-string)))
 
 
-(defn check-schedule [{:keys [schedule work]}]
-  (let [schedule-start-time (to-date-obj (:start-time schedule))
-        schedule-end-time (to-date-obj (:end-time schedule))
-        cron (schedule-to-cron schedule)
-        now (dates/now)]
-    (and (or (nil? schedule-start-time)
-             (dates/before? schedule-start-time now))
-         (or (nil? schedule-end-time)
-             (dates/before? now schedule-end-time)))))
+(defn get-schedule-string [query]
+  (or @schedule-string
+      (get-default-schedule-string)))
+
+
+(defn apply-cards-string! [query new-cards-string]
+  (let [formatted-string (cljfmt.core/reformat-string new-cards-string)]
+    (reset! cards-string formatted-string)
+    (reset! cards-for-query (cards-spec/evaluate-expr formatted-string))
+    formatted-string))
+
+
+(defn apply-schedule-string! [query new-schedule-string]
+  (let [formatted-string (cljfmt.core/reformat-string new-schedule-string)]
+    (reset! schedule-string formatted-string)
+    (reset! schedule-for-query (schedule-spec/evaluate-expr formatted-string))
+    formatted-string))
 
 
 (defn get-default-cards-for-query []
@@ -70,6 +56,15 @@
 (defn get-cards-for-query [query]
   (or @cards-for-query
       (get-default-cards-for-query)))
+
+
+(defn get-default-schedule-for-query []
+  )
+
+
+(defn get-schedule-for-query [query]
+  (or @schedule-for-query
+      (get-default-schedule-for-query)))
 
 
 (defn show-card-for-query! [query card]
@@ -109,4 +104,4 @@
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
-  (println (get-default-data-string)))
+  (println (get-default-cards-string)))
