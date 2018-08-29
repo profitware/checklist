@@ -7,8 +7,8 @@
             [ring.middleware.json :as json]
             [ring.util.response :as response]
             [hiccup.page :as page]
-            [checklist.core :as checklist]
-            [checklist.cards-spec :as cards-spec]
+            [checklist.db :as db]
+            [checklist.schedule :as schedule]
             [checklist.schedule-spec :as schedule-spec])
   (:gen-class))
 
@@ -72,10 +72,9 @@
   [:script (str (when (= (.contains [page-cards page-schedule]
                                     page-name))
                   (let [content (if (= page-name page-cards)
-                                  (checklist/get-cards-string {:page-name page-name
-                                                               :auth auth})
-                                  (checklist/get-schedule-string {:page-name page-name
-                                                                  :auth auth}))]
+                                  (db/get-cards-string)
+                                  (schedule/get-schedule-string {:page-name page-name
+                                                                 :auth auth}))]
                     (str "$(function () {"
                          "  var contentCodeMirror = CodeMirror(document.getElementById('codemirror'), {"
                          "    value: `" content "`,"
@@ -293,8 +292,7 @@
                  (if (.contains [page-cards page-schedule]
                                 page-name)
                    (get-editor page-name)
-                   (get-cards (checklist/get-cards-for-query {:page-name page-name
-                                                              :auth auth})))
+                   (get-cards (db/get-cards)))
                  (get-sidebar page-name auth)]]
 
                (when (.contains [page-cards page-schedule]
@@ -319,21 +317,20 @@
   (cond
     (= page-name page-cards) (let [{input-json :body} request
                                    cards-code (:cards-code input-json)]
-                               (if-let [cards-expr (cards-spec/evaluate-expr cards-code)]
-                                 (let [formatted-string (checklist/apply-cards-string! {} cards-code)]
+                               (if-let [cards-expr (db/expression-of-type :cards cards-code)]
+                                 (let [formatted-string (db/upsert-cards-string! cards-code)]
                                    (response/response {:cards-code formatted-string}))
                                  (response/response {:error "Cannot evaluate expression"})))
     (= page-name page-schedule) (let [{input-json :body} request
                                       schedule-code (:schedule-code input-json)]
                                   (if-let [schedule-expr (schedule-spec/evaluate-expr schedule-code)]
-                                    (let [formatted-string (checklist/apply-schedule-string! {} schedule-code)]
+                                    (let [formatted-string (schedule/apply-schedule-string! {} schedule-code)]
                                       (response/response {:schedule-code formatted-string}))
                                     (response/response {:error "Cannot evaluate expression"})))
     :else (let [{input-json :body} request
                 card input-json
                 {checked-ids :checked} card
-                old-cards (checklist/get-cards-for-query {:page-name page-name
-                                                          :auth true})
+                old-cards (db/get-cards)
                 
                 old-card (first (filter #(= (:card-id %)
                                             (:card-id card))
@@ -348,7 +345,7 @@
                                                                                                                (:checkbox-id old-checkbox))))))
                                                              []
                                                              (:card-checkboxes old-card)))]
-                (checklist/show-card-for-query! {} new-card)
+                (db/upsert-card! new-card)
                 (response/response {:cards [new-card]}))
               (response/response {:cards []})))))
 
