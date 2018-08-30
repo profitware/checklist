@@ -7,9 +7,7 @@
             [ring.middleware.json :as json]
             [ring.util.response :as response]
             [hiccup.page :as page]
-            [checklist.db :as db]
-            [checklist.schedule :as schedule]
-            [checklist.schedule-spec :as schedule-spec])
+            [checklist.db :as db])
   (:gen-class))
 
 
@@ -74,10 +72,10 @@
 (defn get-script [page-name auth]
   [:script (str (when (= (.contains [page-cards page-schedule]
                                     page-name))
-                  (let [content (if (= page-name page-cards)
-                                  (db/get-cards-string tenant)
-                                  (schedule/get-schedule-string {:page-name page-name
-                                                                 :auth auth}))]
+                  (when-let [content (condp = page-name
+                                       page-cards (db/get-cards-string tenant)
+                                       page-schedule (db/get-schedule-string tenant)
+                                       nil)]
                     (str "$(function () {"
                          "  var contentCodeMirror = CodeMirror(document.getElementById('codemirror'), {"
                          "    value: `" content "`,"
@@ -150,10 +148,6 @@
                      "});"))])
 
 
-(defn get-contents-by-page [page-name]
-  "Hello, world! This is a test!")
-
-
 (defn get-checkbox [checkbox-id checkbox-title checkbox-checked checkbox-disabled]
   [:div {:class "form-group"}
    [:label {:class "col-sm-9 control-label"
@@ -164,7 +158,12 @@
                    :id checkbox-id
                    :name checkbox-id
                    :class "form-control"}
-                  [(when checkbox-checked
+                  [(when (or (and (not checkbox-disabled)
+                                  checkbox-checked)
+                             (and checkbox-disabled
+                                  (if (boolean? checkbox-checked)
+                                    checkbox-checked
+                                    (db/get-context-value tenant checkbox-checked))))
                      [:checked "checked"])
                    (when checkbox-disabled
                      [:disabled "disabled"])])]]])
@@ -183,7 +182,7 @@
      [:div {:class "col-xs-6 col-sm-4 col-md-4"}
       [:div {:class (str "card-pf"
                          (when (reduce (fn [acc checkbox]
-                                         (and acc (get checkbox :checkbox-checked)))
+                                         (and acc (= (get checkbox :checkbox-checked) true)))
                                        true
                                        card-checkboxes)
                            " card-disabled"))
@@ -231,7 +230,9 @@
        [:span {:class "pficon pficon-close"}]]
       [:span {:class "pficon pficon-ok"}]
       [:strong "Success!"]
-      " Your cards are updated now!"])
+      (condp = page-name
+        page-cards " Your cards are updated now!"
+        page-schedule " Your schedule is updated now!")])
 
    [:div {:id "codemirror"}]])
 
@@ -326,8 +327,9 @@
                                  (response/response {:error "Cannot evaluate expression"})))
     (= page-name page-schedule) (let [{input-json :body} request
                                       schedule-code (:schedule-code input-json)]
-                                  (if-let [schedule-expr (schedule-spec/evaluate-expr schedule-code)]
-                                    (let [formatted-string (schedule/apply-schedule-string! {} schedule-code)]
+                                  (if-let [schedule-expr (db/expression-of-type :schedule schedule-code)]
+                                    (let [formatted-string (db/upsert-schedule-string! tenant schedule-code)]
+                                      (println formatted-string)
                                       (response/response {:schedule-code formatted-string}))
                                     (response/response {:error "Cannot evaluate expression"})))
     :else (let [{input-json :body} request
@@ -374,7 +376,14 @@
 (get-all-routes)
 
 
+(defn wrap-init-tenant [handler]
+  (fn [request]
+    (db/init-tenant! tenant)
+    (handler request)))
+
+
 (def app (-> routes
+             (wrap-init-tenant)
              (json/wrap-json-response)
              (json/wrap-json-body {:keywords? true :bigdecimals? true})
              (basic-authentication/wrap-basic-authentication auth-ok?)

@@ -35,7 +35,18 @@
                        :checkbox/title {:db/cardinality :db.cardinality/one}
                        :checkbox/disabled {:db/cardinality :db.cardinality/one}
                        :checkbox/checked {:db/cardinality :db.cardinality/one}
-                       :checkbox/tenant {:db/cardinality :db.cardinality/one}})
+                       :checkbox/tenant {:db/cardinality :db.cardinality/one}
+                       :schedule-string/id {:db/cardinality :db.cardinality/one
+                                            :db/index true
+                                            :db/unique :db.unique/identity}
+                       :schedule-string/body {:db/cardinality :db.cardinality/one}
+                       :schedule-string/tenant {:db/cardinality :db.cardinality/one}
+                       :context/id  {:db/cardinality :db.cardinality/one
+                                     :db/index true
+                                     :db/unique :db.unique/identity}
+                       :context/id-str {:db/cardinality :db.cardinality/one}
+                       :context/value {:db/cardinality :db.cardinality/one}
+                       :context/tenant {:db/cardinality :db.cardinality/one}})
 
 
 (def checklist-conn (datascript/create-conn checklist-schema))
@@ -82,19 +93,22 @@
                                   (filter #(not (.contains (map :checkbox-title card-checkboxes)
                                                            (:checkbox/title %)))
                                           old-checkboxes))
-        card-checkboxes-to-upsert (map #(assoc % :checkbox-checked (and (let [checkbox-checked (:checkbox-checked %)]
-                                                                          (or (nil? checkbox-checked)
-                                                                              checkbox-checked))
-                                                                        (or (:checkbox-disabled %)
-                                                                            (or *drop-old-checkbox-state*
-                                                                                (let [checkbox-title (:checkbox-title %)]
-                                                                                  (reduce (fn [acc old-checkbox]
-                                                                                            (or acc
-                                                                                                (and (= (:checkbox/title old-checkbox)
-                                                                                                        checkbox-title)
-                                                                                                     (:checkbox/checked old-checkbox))))
-                                                                                          false
-                                                                                          old-checkboxes))))))
+        card-checkboxes-to-upsert (map #(assoc % :checkbox-checked (let [checkbox-checked (:checkbox-checked %)]
+                                                                     (and (or (nil? checkbox-checked)
+                                                                              checkbox-checked)
+                                                                          (or (and (:checkbox-disabled %)
+                                                                                   (if (keyword? checkbox-checked)
+                                                                                     checkbox-checked
+                                                                                     true))
+                                                                              (or *drop-old-checkbox-state*
+                                                                                  (let [checkbox-title (:checkbox-title %)]
+                                                                                    (reduce (fn [acc old-checkbox]
+                                                                                              (or acc
+                                                                                                  (and (= (:checkbox/title old-checkbox)
+                                                                                                          checkbox-title)
+                                                                                                       (:checkbox/checked old-checkbox))))
+                                                                                            false
+                                                                                            old-checkboxes)))))))
                                        card-checkboxes)
         checkbox-order (atom 0)
         upsertion-data (into [] (concat [{:db/id document-id
@@ -210,3 +224,85 @@
         (str "(defcard sample-card \"Sample Card\"" \newline
              "  (checkbox \"Hello, world\")" \newline
              "  (auto \"This is a test!\" true))" \newline))))
+
+
+(defn get-context-value [tenant context-id-str]
+  (let [value (ffirst (datascript/q '[:find ?context-value
+                                      :in $ [?context-tenant ?context-id-str]
+                                      :where
+                                      [?context :context/value ?context-value]
+                                      [?context :context/id-str ?context-id-str]
+                                      [?context :context/tenant ?context-tenant]]
+                                    @checklist-conn
+                                    [tenant context-id-str]))]
+    (or value
+        false)))
+
+
+(defn- get-context-document-id [tenant context-id-str]
+  (ffirst (datascript/q '[:find ?context
+                          :in $ [?context-tenant ?context-id-str]
+                          :where
+                          [?context :context/id-str ?context-id-str]
+                          [?context :context/tenant ?context-tenant]]
+                        @checklist-conn
+                        [tenant context-id-str])))
+
+
+(defn upsert-context! [tenant context-id-str value]
+  (let [document-id (or (get-context-document-id tenant context-id-str) -1)
+        upsertion-data [{:db/id document-id
+                         :context/id-str context-id-str
+                         :context/value value
+                         :context/tenant tenant}]]
+    (datascript/transact! checklist-conn
+                          upsertion-data)))
+
+
+(defn- get-schedule-string-document-id [tenant]
+  (ffirst (datascript/q '[:find ?schedule
+                          :in $ ?schedule-tenant
+                          :where
+                          [?schedule :schedule-string/tenant ?schedule-tenant]]
+                        @checklist-conn
+                        tenant)))
+
+
+(defn upsert-schedule-string! [tenant body]
+  (let [document-id (or (get-schedule-string-document-id tenant) -1)
+        formatted-string (cljfmt.core/reformat-string body)
+        evaluated-schedule-map (into {} (map #(vector (:schedule-id %) %)
+                                             (schedule-spec/evaluate-expr formatted-string)))
+        upsertion-data [{:db/id document-id
+                         :schedule-string/body formatted-string
+                         :schedule-string/tenant tenant}]]
+    (datascript/transact! checklist-conn
+                          upsertion-data)
+    formatted-string))
+
+
+(defn get-schedule-string [tenant]
+  (let [body (ffirst (datascript/q '[:find ?schedule-body
+                                     :in $ ?schedule-tenant
+                                     :where
+                                     [?schedule :schedule-string/body ?schedule-body]
+                                     [?schedule :schedule-string/tenant ?schedule-tenant]]
+                                   @checklist-conn
+                                   tenant))]
+    (or body
+        (str "(reset sample-card (each-minute))\n"))))
+
+
+(defn init-tenant! [tenant]
+  (when-not (ffirst (datascript/q '[:find ?tenant
+                                    :in $ ?tenant
+                                    :where
+                                    [?c :card/tenant ?tenant]
+                                    [?cs :cards-string/tenant ?tenant]
+                                    [?ss :schedule-string/tenant ?tenant]]
+                                  @checklist-conn
+                                  tenant))
+    (upsert-cards-string! tenant
+                          (get-cards-string tenant))
+    (upsert-schedule-string! tenant
+                             (get-schedule-string tenant))))
