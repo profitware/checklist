@@ -18,6 +18,7 @@
                        :card/symbol {:db/cardinality :db.cardinality/one}
                        :card/title {:db/cardinality :db.cardinality/one}
                        :card/tenant {:db/cardinality :db.cardinality/one}
+                       :card/deleted {:db/cardinality :db.cardinality/one}
                        :cards-string/id {:db/cardinality :db.cardinality/one
                                         :db/index true
                                         :db/unique :db.unique/identity}
@@ -29,6 +30,8 @@
                        :checkbox/card-id {:db/cardinality :db.cardinality/one
                                           :db/valueType :db.type/ref}
                        :checkbox/id-str {:db/cardinality :db.cardinality/one}
+                       :checkbox/deleted {:db/cardinality :db.cardinality/one}
+                       :checkbox/order {:db/cardinality :db.cardinality/one}
                        :checkbox/title {:db/cardinality :db.cardinality/one}
                        :checkbox/disabled {:db/cardinality :db.cardinality/one}
                        :checkbox/checked {:db/cardinality :db.cardinality/one}
@@ -38,52 +41,92 @@
 (def checklist-conn (datascript/create-conn checklist-schema))
 
 
-(defn- get-card-document-id [card]
-  (let [{card-id-symbol :card-id} card
-        tenant "default"]
+(defn- get-card-document-id [tenant card]
+  (let [{card-id-symbol :card-id} card]
     (ffirst (datascript/q '[:find ?card
                             :in $ [?card-id-symbol ?card-tenant]
                             :where
                             [?card :card/id-symbol ?card-id-symbol]
+                            [?card :card/deleted false]
                             [?card :card/tenant ?card-tenant]]
                           @checklist-conn
                           [card-id-symbol tenant]))))
 
 
-(defn upsert-card! [card]
+(defn- get-old-checkboxes [tenant card-id]
+  (datascript/pull-many @checklist-conn
+                        '[*]
+                        (map second
+                             (datascript/q '[:find ?checkbox-title (max ?checkbox)
+                                             :in $ [?card-id ?checkbox-tenant]
+                                             :where
+                                             [?checkbox :checkbox/card-id ?card-id]
+                                             [?checkbox :checkbox/title ?checkbox-title]
+                                             [?checkbox :checkbox/deleted false]
+                                             [?checkbox :checkbox/tenant ?checkbox-tenant]]
+                                           @checklist-conn
+                                           [card-id tenant]))))
+
+
+(defn upsert-card! [tenant card]
   (let [{card-id-symbol :card-id
          card-title :card-title
-         card-checkboxes :card-checkboxes} card
-        tenant "default"
-        document-id (or (get-card-document-id card) -1)
+         card-checkboxes :card-checkboxes
+         card-deleted :card-deleted} card
+        document-id (or (get-card-document-id tenant card) -1)
+        old-checkboxes (get-old-checkboxes tenant document-id)
+        checkboxes-to-delete (map #(assoc % :checkbox/deleted true)
+                                  (filter #(not (.contains (map :checkbox-title card-checkboxes)
+                                                           (:checkbox/title %)))
+                                          old-checkboxes))
+        checkbox-order (atom 0)
         upsertion-data (into [] (concat [{:db/id document-id
                                           :card/id-symbol card-id-symbol
                                           :card/title card-title
-                                          :card/tenant tenant}]
+                                          :card/tenant tenant
+                                          :card/deleted (or card-deleted false)}]
                                         (for [{checkbox-id-str :checkbox-id
                                                checkbox-title :checkbox-title
                                                checkbox-disabled :checkbox-disabled
-                                               checkbox-checked :checkbox-checked} card-checkboxes]
-                                          {:checkbox/card-id document-id
+                                               checkbox-checked :checkbox-checked
+                                               checkbox-deleted :checkbox-deleted} card-checkboxes
+                                              :when (not (.contains (map :checkbox/title checkboxes-to-delete)
+                                                                    checkbox-title))]
+                                          {:checkbox/id [card-id-symbol checkbox-id-str tenant]
+                                           :checkbox/card-id document-id
                                            :checkbox/id-str checkbox-id-str
+                                           :checkbox/tenant tenant
+                                           :checkbox/deleted (or checkbox-deleted false)
+                                           :checkbox/order (swap! checkbox-order inc)
                                            :checkbox/title checkbox-title
                                            :checkbox/disabled (or checkbox-disabled false)
-                                           :checkbox/checked (or checkbox-checked false)})))]
+                                           :checkbox/checked (or checkbox-checked false)})
+                                        checkboxes-to-delete))]
     (datascript/transact! checklist-conn
                           upsertion-data)))
 
 
-(defn get-cards []
+(defn delete-card! [tenant card]
+  (let [document-id (or (get-card-document-id tenant card) -1)]
+    (upsert-card! tenant (assoc card :card-deleted true))
+    (datascript/transact! checklist-conn
+                          (map #(assoc % :checkbox/deleted true)
+                               (get-old-checkboxes tenant document-id)))))
+
+
+(defn get-cards [tenant]
   (let [card-arguments 3
-        tenant "default"
-        cards (datascript/q '[:find ?card-id-symbol ?card-title ?card-tenant ?checkbox-id-str ?checkbox-title ?checkbox-disabled ?checkbox-checked
+        cards (datascript/q '[:find ?card-id-symbol ?card-title ?card-tenant ?checkbox-order ?checkbox-id-str ?checkbox-title ?checkbox-disabled ?checkbox-checked
                               :in $ ?card-tenant %
                               :where
                               [?card :card/id-symbol ?card-id-symbol]
                               [?card :card/title ?card-title]
                               [?card :card/tenant ?card-tenant]
+                              [?card :card/deleted false]
                               [?checkbox :checkbox/card-id ?card]
+                              [?checkbox :checkbox/order ?checkbox-order]
                               [?checkbox :checkbox/id-str ?checkbox-id-str]
+                              [?checkbox :checkbox/deleted false]
                               [?checkbox :checkbox/title ?checkbox-title]
                               [?checkbox :checkbox/disabled ?checkbox-disabled]
                               [?checkbox :checkbox/checked ?checkbox-checked]]
@@ -94,42 +137,51 @@
         {:card-id card-id-symbol
          :card-title card-title
          :card-tenant card-tenant
-         :card-checkboxes (for [checkbox checkboxes]
-                            (let [[checkbox-id-str checkbox-title checkbox-disabled checkbox-checked] (drop card-arguments checkbox)]
+         :card-checkboxes (for [checkbox (sort-by #(nth % card-arguments) checkboxes)]
+                            (let [[checbox-order checkbox-id-str checkbox-title checkbox-disabled checkbox-checked] (drop card-arguments checkbox)]
                               {:checkbox-id checkbox-id-str
                                :checkbox-title checkbox-title
                                :checkbox-disabled checkbox-disabled
                                :checkbox-checked checkbox-checked}))}))))
 
 
-(defn- get-cards-string-document-id []
-  (let [tenant "default"]
-    (ffirst (datascript/q '[:find ?card
-                            :in $ ?card-tenant
-                            :where
-                            [?card :cards-string/tenant ?card-tenant]]
-                          @checklist-conn
-                          tenant))))
+(defn- get-cards-string-document-id [tenant]
+  (ffirst (datascript/q '[:find ?card
+                          :in $ ?card-tenant
+                          :where
+                          [?card :cards-string/tenant ?card-tenant]]
+                        @checklist-conn
+                        tenant)))
 
 
-(defn upsert-cards-string! [body]
-  (let [tenant "default"
-        document-id (or (get-cards-string-document-id) -1)
+(defn upsert-cards-string! [tenant body]
+  (let [document-id (or (get-cards-string-document-id tenant) -1)
         formatted-string (cljfmt.core/reformat-string body)
-        evaluated-cards (cards-spec/evaluate-expr formatted-string)
-        old-cards (get-cards)
+        old-cards (get-cards tenant)
+        evaluated-cards-map (into {} (map #(vector (:card-id %) %)
+                                          (cards-spec/evaluate-expr formatted-string)))
         upsertion-data [{:db/id document-id
                          :cards-string/body formatted-string
                          :cards-string/tenant tenant}]]
     (datascript/transact! checklist-conn
                           upsertion-data)
-    (upsert-card! evaluated-card)
+    (loop [[old-card & rest-old-cards] old-cards]
+      (when old-card
+        (when-not (.contains (keys evaluated-cards-map)
+                             (:card-id old-card))
+          (delete-card! tenant old-card)))
+      (when rest-old-cards
+        (recur rest-old-cards)))
+    (loop [[new-card & rest-new-cards] (vals evaluated-cards-map)]
+      (when new-card
+        (upsert-card! tenant new-card))
+      (when rest-new-cards
+        (recur rest-new-cards)))
     formatted-string))
 
 
-(defn get-cards-string []
-  (let [tenant "default"
-        body (ffirst (datascript/q '[:find ?card-body
+(defn get-cards-string [tenant]
+  (let [body (ffirst (datascript/q '[:find ?card-body
                                      :in $ ?card-tenant
                                      :where
                                      [?card :cards-string/body ?card-body]

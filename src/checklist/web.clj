@@ -17,6 +17,9 @@
   true)
 
 
+(def tenant "general")
+
+
 (def head
   [:head
    [:title "Checklist"]
@@ -72,7 +75,7 @@
   [:script (str (when (= (.contains [page-cards page-schedule]
                                     page-name))
                   (let [content (if (= page-name page-cards)
-                                  (db/get-cards-string)
+                                  (db/get-cards-string tenant)
                                   (schedule/get-schedule-string {:page-name page-name
                                                                  :auth auth}))]
                     (str "$(function () {"
@@ -292,7 +295,7 @@
                  (if (.contains [page-cards page-schedule]
                                 page-name)
                    (get-editor page-name)
-                   (get-cards (db/get-cards)))
+                   (get-cards (db/get-cards tenant)))
                  (get-sidebar page-name auth)]]
 
                (when (.contains [page-cards page-schedule]
@@ -318,7 +321,7 @@
     (= page-name page-cards) (let [{input-json :body} request
                                    cards-code (:cards-code input-json)]
                                (if-let [cards-expr (db/expression-of-type :cards cards-code)]
-                                 (let [formatted-string (db/upsert-cards-string! cards-code)]
+                                 (let [formatted-string (db/upsert-cards-string! tenant cards-code)]
                                    (response/response {:cards-code formatted-string}))
                                  (response/response {:error "Cannot evaluate expression"})))
     (= page-name page-schedule) (let [{input-json :body} request
@@ -330,7 +333,7 @@
     :else (let [{input-json :body} request
                 card input-json
                 {checked-ids :checked} card
-                old-cards (db/get-cards)
+                old-cards (db/get-cards tenant)
                 
                 old-card (first (filter #(= (:card-id %)
                                             (:card-id card))
@@ -345,7 +348,7 @@
                                                                                                                (:checkbox-id old-checkbox))))))
                                                              []
                                                              (:card-checkboxes old-card)))]
-                (db/upsert-card! new-card)
+                (db/upsert-card! tenant new-card)
                 (response/response {:cards [new-card]}))
               (response/response {:cards []})))))
 
