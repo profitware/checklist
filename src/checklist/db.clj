@@ -68,6 +68,9 @@
                                            [card-id tenant]))))
 
 
+(def ^:dynamic *drop-old-checkbox-state* true)
+
+
 (defn upsert-card! [tenant card]
   (let [{card-id-symbol :card-id
          card-title :card-title
@@ -79,6 +82,20 @@
                                   (filter #(not (.contains (map :checkbox-title card-checkboxes)
                                                            (:checkbox/title %)))
                                           old-checkboxes))
+        card-checkboxes-to-upsert (map #(assoc % :checkbox-checked (and (let [checkbox-checked (:checkbox-checked %)]
+                                                                          (or (nil? checkbox-checked)
+                                                                              checkbox-checked))
+                                                                        (or (:checkbox-disabled %)
+                                                                            (or *drop-old-checkbox-state*
+                                                                                (let [checkbox-title (:checkbox-title %)]
+                                                                                  (reduce (fn [acc old-checkbox]
+                                                                                            (or acc
+                                                                                                (and (= (:checkbox/title old-checkbox)
+                                                                                                        checkbox-title)
+                                                                                                     (:checkbox/checked old-checkbox))))
+                                                                                          false
+                                                                                          old-checkboxes))))))
+                                       card-checkboxes)
         checkbox-order (atom 0)
         upsertion-data (into [] (concat [{:db/id document-id
                                           :card/id-symbol card-id-symbol
@@ -89,7 +106,7 @@
                                                checkbox-title :checkbox-title
                                                checkbox-disabled :checkbox-disabled
                                                checkbox-checked :checkbox-checked
-                                               checkbox-deleted :checkbox-deleted} card-checkboxes
+                                               checkbox-deleted :checkbox-deleted} card-checkboxes-to-upsert
                                               :when (not (.contains (map :checkbox/title checkboxes-to-delete)
                                                                     checkbox-title))]
                                           {:checkbox/id [card-id-symbol checkbox-id-str tenant]
@@ -174,7 +191,8 @@
         (recur rest-old-cards)))
     (loop [[new-card & rest-new-cards] (vals evaluated-cards-map)]
       (when new-card
-        (upsert-card! tenant new-card))
+        (binding [*drop-old-checkbox-state* false]
+          (upsert-card! tenant new-card)))
       (when rest-new-cards
         (recur rest-new-cards)))
     formatted-string))
