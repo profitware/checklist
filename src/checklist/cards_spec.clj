@@ -13,12 +13,12 @@
                                      ::checkbox-checked]))
 
 
-(defmacro checkbox [checkbox-title]
+(defmacro check [checkbox-title]
   {:checkbox-id (str "checkbox-" (hash checkbox-title))
    :checkbox-title checkbox-title})
 
 
-(s/fdef checkbox
+(s/fdef check
         :args (s/cat :checkbox-title string?)
         :ret ::checkbox-spec)
 
@@ -39,8 +39,8 @@
 
 (s/def ::card-id string?)
 (s/def ::card-title string?)
-(s/def ::checkboxes-macros (s/or :checkbox (s/cat :smb #{'checkbox}
-                                                  :str string?)
+(s/def ::checkboxes-macros (s/or :check (s/cat :smb #{'check}
+                                               :str string?)
                                  :auto (s/cat :smb #{'auto}
                                               :str string?
                                               :kwd ::checkbox-checked)))

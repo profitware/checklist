@@ -41,6 +41,19 @@
                                             :db/unique :db.unique/identity}
                        :schedule-string/body {:db/cardinality :db.cardinality/one}
                        :schedule-string/tenant {:db/cardinality :db.cardinality/one}
+                       :schedule/id {:db/cardinality :db.cardinality/one
+                                     :db/index true
+                                     :db/unique :db.unique/identity}
+                       :schedule/id-str {:db/cardinality :db.cardinality/one}
+                       :schedule/deleted {:db/cardinality :db.cardinality/one}
+                       :schedule/string-id {:db/cardinality :db.cardinality/one
+                                            :db/valueType :db.type/ref}
+                       :schedule/schedule-type {:db/cardinality :db.cardinality/one}
+                       :schedule/schedule-card {:db/cardinality :db.cardinality/one}
+                       :schedule/schedule-context {:db/cardinality :db.cardinality/one}
+                       :schedule/schedule-schedule {:db/cardinality :db.cardinality/one}
+                       :schedule/order {:db/cardinality :db.cardinality/one}
+                       :schedule/tenant {:db/cardinality :db.cardinality/one}
                        :context/id  {:db/cardinality :db.cardinality/one
                                      :db/index true
                                      :db/unique :db.unique/identity}
@@ -222,7 +235,7 @@
                                    tenant))]
     (or body
         (str "(defcard sample-card \"Sample Card\"" \newline
-             "  (checkbox \"Hello, world\")" \newline
+             "  (check \"Hello, world\")" \newline
              "  (auto \"This is a test!\" true))" \newline))))
 
 
@@ -268,14 +281,58 @@
                         tenant)))
 
 
+(defn get-schedules [tenant]
+  (let [schedules (datascript/q '[:find ?schedule-order ?schedule-id-str ?schedule-type ?schedule-card ?schedule-context ?schedule-schedule
+                                  :in $ ?schedule-tenant %
+                                  :where
+                                  [?schedule :schedule/id-str ?schedule-id-str]
+                                  [?schedule :schedule/schedule-type ?schedule-type]
+                                  [?schedule :schedule/schedule-card ?schedule-card]
+                                  [?schedule :schedule/schedule-context ?schedule-context]
+                                  [?schedule :schedule/schedule-schedule ?schedule-schedule]
+                                  [?schedule :schedule/deleted false]
+                                  [?schedule :schedule/order ?schedule-order]
+                                  [?schedule :schedule/tenant ?schedule-tenant]]
+                                @checklist-conn
+                                tenant)]
+    (for [[schedule-order schedule-id-str schedule-type schedule-card schedule-context schedule-schedule] schedules]
+      {:schedule-id schedule-id-str
+       :schedule-type schedule-type
+       :schedule-card schedule-card
+       :schedule-context schedule-context
+       :schedule schedule-schedule})))
+
+
 (defn upsert-schedule-string! [tenant body]
   (let [document-id (or (get-schedule-string-document-id tenant) -1)
         formatted-string (cljfmt.core/reformat-string body)
-        evaluated-schedule-map (into {} (map #(vector (:schedule-id %) %)
-                                             (schedule-spec/evaluate-expr formatted-string)))
-        upsertion-data [{:db/id document-id
-                         :schedule-string/body formatted-string
-                         :schedule-string/tenant tenant}]]
+        old-schedules (get-schedules tenant)
+        evaluated-schedules (schedule-spec/evaluate-expr formatted-string)
+        schedules-to-delete (map #(assoc % :schedule/deleted true)
+                                 (filter #(not (.contains (map :schedule-id evaluated-schedules)
+                                                          (:schedule/id-str %)))
+                                         old-schedules))
+        schedule-order (atom 0)
+        upsertion-data (into [] (concat [{:db/id document-id
+                                          :schedule-string/body formatted-string
+                                          :schedule-string/tenant tenant}]
+                                        (for [{schedule-id-str :schedule-id
+                                               schedule-type :schedule-type
+                                               schedule-card :schedule-card
+                                               schedule-context :schedule-context
+                                               schedule :schedule} evaluated-schedules
+                                              :when (not (.contains (map :schedule/id-str schedules-to-delete)
+                                                                    schedule-id-str))]
+                                          {:schedule/id-str schedule-id-str
+                                           :schedule/schedule-type schedule-type
+                                           :schedule/schedule-card (or schedule-card false)
+                                           :schedule/schedule-context (or schedule-context false)
+                                           :schedule/schedule-schedule schedule
+                                           :schedule/deleted false
+                                           :schedule/tenant tenant
+                                           :schedule/string-id document-id
+                                           :schedule/order (swap! schedule-order inc)})
+                                        schedules-to-delete))]
     (datascript/transact! checklist-conn
                           upsertion-data)
     formatted-string))

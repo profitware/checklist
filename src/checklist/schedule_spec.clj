@@ -32,6 +32,7 @@
 (s/def ::schedule-id string?)
 (s/def ::schedule-type keyword?)
 (s/def ::schedule-card keyword?)
+(s/def ::schedule-context keyword?)
 (s/def ::schedule (s/keys :req [::minute
                                 ::hour
                                 ::day
@@ -40,7 +41,8 @@
 (s/def ::schedule-spec (s/keys :req [::schedule-id
                                      ::schedule-type
                                      ::schedule]
-                               :opt [::schedule-card]))
+                               :opt [::schedule-card
+                                     ::schedule-context]))
 (s/def ::schedule-schedule-spec (s/or :simple (s/cat :smb (->> ["each-minute"
                                                                 "hourly"
                                                                 "daily"
@@ -109,13 +111,59 @@
         :ret ::schedule-spec)
 
 
-(s/def ::schedule-input-spec (s/cat :smb (->> ["hide"
-                                               "show"
-                                               "reset"]
-                                              (map symbol)
-                                              set)
-                                    :smb symbol?
-                                    :schedule ::schedule-schedule-spec))
+(defmacro check [schedule-context schedule]
+  {:schedule-id (str "schedule-" (hash [schedule-context schedule]))
+   :schedule-type :check
+   :schedule-context schedule-context
+   :schedule schedule})
+
+
+(s/fdef check
+        :args (s/cat :schedule-context keyword?
+                     :schedule ::schedule-schedule-spec)
+        :ret ::schedule-spec)
+
+
+(defmacro uncheck [schedule-context schedule]
+  {:schedule-id (str "schedule-" (hash [schedule-context schedule]))
+   :schedule-type :uncheck
+   :schedule-context schedule-context
+   :schedule schedule})
+
+
+(s/fdef uncheck
+        :args (s/cat :schedule-context keyword?
+                     :schedule ::schedule-schedule-spec)
+        :ret ::schedule-spec)
+
+
+(defmacro toggle [schedule-context schedule]
+  {:schedule-id (str "schedule-" (hash [schedule-context schedule]))
+   :schedule-type :toggle
+   :schedule-context schedule-context
+   :schedule schedule})
+
+
+(s/fdef toggle
+        :args (s/cat :schedule-context keyword?
+                     :schedule ::schedule-schedule-spec)
+        :ret ::schedule-spec)
+
+
+(s/def ::schedule-input-spec (s/or :crd (s/cat :cmd (->> ["hide"
+                                                          "show"
+                                                          "reset"]
+                                                         (map symbol)
+                                                         set)
+                                               :smb symbol?
+                                               :schedule ::schedule-schedule-spec)
+                                   :ctx (s/cat :cmd (->> ["check"
+                                                          "uncheck"
+                                                          "toggle"]
+                                                         (map symbol)
+                                                         set)
+                                               :kwd keyword?
+                                               :schedule ::schedule-schedule-spec)))
 
 
 (s/def ::evaluation (s/coll-of ::schedule-input-spec

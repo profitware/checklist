@@ -76,7 +76,29 @@
 
 
 (defn get-script [page-name auth]
-  [:script (str (when (= (.contains [page-cards page-schedule]
+  [:script (str (str "$(function () {"
+                     "  var alt_pressed = false;"
+                     "  $('body').keydown(function (event) {"
+                     "    if (alt_pressed) {"
+                     "      switch (event.which) {"
+                     "        case 84:"
+                     "          window.location.href = '.';"
+                     "          break;"
+                     "        case 67:"
+                     "          window.location.href = 'cards';"
+                     "          break;"
+                     "        case 83:"
+                     "          window.location.href = 'schedule';"
+                     "          break;"
+                     "      }"
+                     "      event.preventDefault();"
+                     "    }"
+                     "    alt_pressed = (event.which == 18);"
+                     "  }).keyup(function (event) {"
+                     "    alt_pressed = false;"
+                     "  });"
+                     "});")
+                (when (= (.contains [page-cards page-schedule]
                                     page-name))
                   (when-let [content (condp = page-name
                                        page-cards (db/get-cards-string tenant)
@@ -91,6 +113,7 @@
                          "    styleActiveLine: true,"
                          "    matchBrackets: true"
                          "  });"
+                         "  contentCodeMirror.execCommand('goDocEnd');"
                          "  parinferCodeMirror.init(contentCodeMirror);"
                          "  $('button.close').click(function () { $(this).closest('.alert').hide(); });"
                          "  $('.action-button').click(function () {"
@@ -110,6 +133,11 @@
                          "        $('.alert-danger').show();"
                          "      }"
                          "    });"
+                         "  });"
+                         "  contentCodeMirror.setOption('extraKeys', {"
+                         "    'Ctrl-Enter': function(cm) {"
+                         "      $('.action-button').click();"
+                         "    }"
                          "  });"
                          "});")))
                 (str "$(function () {"
