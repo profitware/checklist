@@ -2,11 +2,16 @@
   (:require [compojure.core :as compojure]
             [compojure.route :as route]
             [ring.adapter.jetty :as jetty]
-            [ring.middleware.basic-authentication :as basic-authentication]
+            [ring.middleware.cookies :as cookies]
+            [ring.middleware.params :as params]
             [ring.middleware.reload :as reload]
+            [ring.middleware.session :as session]
             [ring.middleware.json :as json]
             [ring.util.response :as response]
             [hiccup.page :as page]
+            [cemerick.friend :as friend]
+            [cemerick.friend.credentials :as credentials]
+            [cemerick.friend.workflows :as workflows]
             [checklist.db :as db])
   (:gen-class))
 
@@ -53,6 +58,7 @@
 (def page-today "today")
 (def page-cards "cards")
 (def page-schedule "schedule")
+(def page-login "login")
 
 
 (defn get-menu [page-name]
@@ -81,6 +87,7 @@
                          "    value: `" content "`,"
                          "    theme: 'mdn-like',"
                          "    lineNumbers: true,"
+                         "    autofocus: true,"
                          "    styleActiveLine: true,"
                          "    matchBrackets: true"
                          "  });"
@@ -199,8 +206,6 @@
 
 
 (defn get-editor [page-name]
-
-
   [:div {:class "col-xs-12 col-sm-9"}
    [:p {:class "pull-right visible-xs"}
     [:button {:class "btn btn-primary btn-xs"
@@ -258,6 +263,45 @@
     "\nWait while job is running"]])
 
 
+(defn get-login-form []
+  [:div {:class "col-xs-12 col-sm-9"}
+   [:p {:class "pull-right visible-xs"}
+    [:button {:class "btn btn-primary btn-xs"
+              :type "button"
+              :data-toggle "offcanvas"}
+     "Toggle nav"]]
+
+   [:form {:class "form-horizontal"
+           :method "POST"}
+    [:div {:class "form-group"}
+     [:label {:class "col-sm-3 control-label"
+              :for "username"}
+      "Username"]
+     [:div {:class "col-sm-6"}
+      [:input {:type "text"
+               :id "username"
+               :name "username"
+               :class "form-control"
+               :autofocus "autofocus"}]]]
+    [:div {:class "form-group"}
+     [:label {:class "col-sm-3 control-label"
+              :for "password"}
+      "Password"]
+     [:div {:class "col-sm-6"}
+      [:input {:type "password"
+               :id "password"
+               :name "password"
+               :class "form-control"}]]]
+    [:div {:style "padding-top: 10px; padding-bottom: 10px;"
+           :class "row"}
+     [:div {:class "col-sm-6 col-sm-offset-3"}
+      [:span
+       [:button {:type "submit"
+                 :id "submit"
+                 :class "btn btn-primary"}
+        "Login"]]]]]])
+
+
 (defn get-page [page-name auth]
   (page/html5 head
               [:body {:class "cards-pf"}
@@ -296,7 +340,9 @@
                  (if (.contains [page-cards page-schedule]
                                 page-name)
                    (get-editor page-name)
-                   (get-cards (db/get-cards tenant)))
+                   (if (= page-name page-login)
+                     (get-login-form)
+                     (get-cards (db/get-cards tenant))))
                  (get-sidebar page-name auth)]]
 
                (when (.contains [page-cards page-schedule]
@@ -329,7 +375,6 @@
                                       schedule-code (:schedule-code input-json)]
                                   (if-let [schedule-expr (db/expression-of-type :schedule schedule-code)]
                                     (let [formatted-string (db/upsert-schedule-string! tenant schedule-code)]
-                                      (println formatted-string)
                                       (response/response {:schedule-code formatted-string}))
                                     (response/response {:error "Cannot evaluate expression"})))
     :else (let [{input-json :body} request
@@ -364,16 +409,30 @@
            (compojure/POST (str "/" ~page-name "/ajax") request# (post-ajax ~page-symbol request#)))))
 
 
-(defmacro get-all-routes []
-  `(compojure/defroutes routes
-     ~@(get-routes "today" "/")
+(defmacro get-user-routes []
+  `(compojure/defroutes user-routes
      ~@(get-routes "cards")
-     ~@(get-routes "schedule")
+     ~@(get-routes "schedule")))
+
+
+(get-user-routes)
+
+
+(defmacro get-all-routes [user-routes]
+  `(compojure/defroutes routes
+     (compojure/GET "/favicon.ico" request# "")
+     (compojure/GET "/login" request# (get-page page-login {}))
+     ~@(get-routes "today" "/")
+
      (route/resources "/")
+
+     (friend/wrap-authorize ~user-routes #{::user})
+     (friend/logout (compojure/ANY "/logout" request# (response/redirect "/")))
+
      (route/not-found "<h1>Not found</h1>")))
 
 
-(get-all-routes)
+(get-all-routes user-routes)
 
 
 (defn wrap-init-tenant [handler]
@@ -386,7 +445,14 @@
              (wrap-init-tenant)
              (json/wrap-json-response)
              (json/wrap-json-body {:keywords? true :bigdecimals? true})
-             (basic-authentication/wrap-basic-authentication auth-ok?)
+             (friend/authenticate {:workflows [(workflows/interactive-form :credential-fn (fn [{:keys [username password] :as creds}]
+                                                                                            (when (and (= "test" password)
+                                                                                                       (= "test" username))
+                                                                                              {:identity username
+                                                                                               :roles #{::user}})))]})
+             (params/wrap-params)
+             (session/wrap-session)
+             (cookies/wrap-cookies)
              (reload/wrap-reload)))
 
 
