@@ -184,6 +184,7 @@
 
 
 (defn get-checkbox [checkbox-id checkbox-title checkbox-checked checkbox-disabled]
+  (println "???" checkbox-title checkbox-disabled checkbox-checked)
   [:div {:class "form-group"}
    [:label {:class "col-sm-9 control-label"
             :for checkbox-id}
@@ -213,11 +214,16 @@
      "Toggle nav"]]
    (for [{card-id :card-id
           card-title :card-title
-          card-checkboxes :card-checkboxes} cards]
+          card-hidden :card-hidden
+          card-checkboxes :card-checkboxes} cards
+         :when (not card-hidden)]
      [:div {:class "col-xs-6 col-sm-4 col-md-4"}
       [:div {:class (str "card-pf"
                          (when (reduce (fn [acc checkbox]
-                                         (and acc (= (get checkbox :checkbox-checked) true)))
+                                         (let [checked (get checkbox :checkbox-checked)]
+                                           (and acc (or (= checked true)
+                                                        (and (keyword? checked)
+                                                             (db/get-context-value tenant checked))))))
                                        true
                                        card-checkboxes)
                            " card-disabled"))

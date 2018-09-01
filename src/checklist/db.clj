@@ -1,9 +1,23 @@
 (ns checklist.db
   (:require [datascript.core :as datascript]
             [cljfmt.core]
+            [timely.core :as timely]
             [checklist.cards-spec :as cards-spec]
             [checklist.schedule-spec :as schedule-spec])
   (:gen-class))
+
+
+(try
+  (when timely/SCHEDULER
+    (.stop timely/SCHEDULER))
+  (catch IllegalStateException _
+    nil))
+
+
+(try
+  (timely/start-scheduler)
+  (catch IllegalStateException _
+    nil))
 
 
 (defn expression-of-type [type expression]
@@ -18,6 +32,7 @@
                        :card/symbol {:db/cardinality :db.cardinality/one}
                        :card/title {:db/cardinality :db.cardinality/one}
                        :card/tenant {:db/cardinality :db.cardinality/one}
+                       :card/hidden {:db/cardinality :db.cardinality/one}
                        :card/deleted {:db/cardinality :db.cardinality/one}
                        :cards-string/id {:db/cardinality :db.cardinality/one
                                         :db/index true
@@ -54,6 +69,7 @@
                        :schedule/schedule-schedule {:db/cardinality :db.cardinality/one}
                        :schedule/order {:db/cardinality :db.cardinality/one}
                        :schedule/tenant {:db/cardinality :db.cardinality/one}
+                       :schedule/task-id {:db/cardinality :db.cardinality/one}
                        :context/id  {:db/cardinality :db.cardinality/one
                                      :db/index true
                                      :db/unique :db.unique/identity}
@@ -99,7 +115,8 @@
   (let [{card-id-symbol :card-id
          card-title :card-title
          card-checkboxes :card-checkboxes
-         card-deleted :card-deleted} card
+         card-deleted :card-deleted
+         card-hidden :card-hidden} card
         document-id (or (get-card-document-id tenant card) -1)
         old-checkboxes (get-old-checkboxes tenant document-id)
         checkboxes-to-delete (map #(assoc % :checkbox/deleted true)
@@ -128,6 +145,7 @@
                                           :card/id-symbol card-id-symbol
                                           :card/title card-title
                                           :card/tenant tenant
+                                          :card/hidden (or card-hidden false)
                                           :card/deleted (or card-deleted false)}]
                                         (for [{checkbox-id-str :checkbox-id
                                                checkbox-title :checkbox-title
@@ -159,13 +177,14 @@
 
 
 (defn get-cards [tenant]
-  (let [card-arguments 3
-        cards (datascript/q '[:find ?card-id-symbol ?card-title ?card-tenant ?checkbox-order ?checkbox-id-str ?checkbox-title ?checkbox-disabled ?checkbox-checked
+  (let [card-arguments 4
+        cards (datascript/q '[:find ?card-id-symbol ?card-title ?card-tenant ?card-hidden ?checkbox-order ?checkbox-id-str ?checkbox-title ?checkbox-disabled ?checkbox-checked
                               :in $ ?card-tenant %
                               :where
                               [?card :card/id-symbol ?card-id-symbol]
                               [?card :card/title ?card-title]
                               [?card :card/tenant ?card-tenant]
+                              [?card :card/hidden ?card-hidden]
                               [?card :card/deleted false]
                               [?checkbox :checkbox/card-id ?card]
                               [?checkbox :checkbox/order ?checkbox-order]
@@ -177,16 +196,43 @@
                             @checklist-conn
                             tenant)]
     (for [card (group-by (partial take card-arguments) cards)]
-      (let [[[card-id-symbol card-title card-tenant] checkboxes] card]
+      (let [[[card-id-symbol card-title card-tenant card-hidden] checkboxes] card]
         {:card-id card-id-symbol
          :card-title card-title
          :card-tenant card-tenant
+         :card-hidden card-hidden
          :card-checkboxes (for [checkbox (sort-by #(nth % card-arguments) checkboxes)]
                             (let [[checbox-order checkbox-id-str checkbox-title checkbox-disabled checkbox-checked] (drop card-arguments checkbox)]
                               {:checkbox-id checkbox-id-str
                                :checkbox-title checkbox-title
                                :checkbox-disabled checkbox-disabled
                                :checkbox-checked checkbox-checked}))}))))
+
+
+(defn hide-card! [tenant card-id-symbol]
+  (loop [[card & rest-cards] (get-cards tenant)]
+    (when (= (str (:card-id card))
+             (str card-id-symbol))
+      (upsert-card! tenant (assoc card :card-hidden true)))
+    (when rest-cards
+      (recur rest-cards))))
+
+
+(defn show-card! [tenant card-id-symbol]
+  (loop [[card & rest-cards] (get-cards tenant)]
+    (when (= (str (:card-id card))
+             (str card-id-symbol))
+      (upsert-card! tenant (assoc card :card-hidden false)))
+    (when rest-cards
+      (recur rest-cards))))
+
+
+(defn reset-card! [tenant card-id-symbol]
+  (let [document-id (get-card-document-id tenant {:card-id card-id-symbol})]
+    (datascript/transact! checklist-conn
+                          (map #(assoc % :checkbox/checked false)
+                               (filter #(not (:checkbox/disabled %))
+                                       (get-old-checkboxes tenant document-id))))))
 
 
 (defn- get-cards-string-document-id [tenant]
@@ -236,7 +282,8 @@
     (or body
         (str "(defcard sample-card \"Sample Card\"" \newline
              "  (check \"Hello, world\")" \newline
-             "  (auto \"This is a test!\" true))" \newline))))
+             "  (auto \"Always checked!\" true)" \newline
+             "  (auto \"Blinking!\" :blink))" \newline))))
 
 
 (defn get-context-value [tenant context-id-str]
@@ -248,6 +295,7 @@
                                       [?context :context/tenant ?context-tenant]]
                                     @checklist-conn
                                     [tenant context-id-str]))]
+    (println "!!!" tenant context-id-str value)
     (or value
         false)))
 
@@ -282,7 +330,7 @@
 
 
 (defn get-schedules [tenant]
-  (let [schedules (datascript/q '[:find ?schedule-order ?schedule-id-str ?schedule-type ?schedule-card ?schedule-context ?schedule-schedule
+  (let [schedules (datascript/q '[:find ?schedule-order ?schedule-id-str ?schedule-type ?schedule-card ?schedule-context ?schedule-schedule ?schedule-task-id
                                   :in $ ?schedule-tenant %
                                   :where
                                   [?schedule :schedule/id-str ?schedule-id-str]
@@ -290,27 +338,59 @@
                                   [?schedule :schedule/schedule-card ?schedule-card]
                                   [?schedule :schedule/schedule-context ?schedule-context]
                                   [?schedule :schedule/schedule-schedule ?schedule-schedule]
+                                  [?schedule :schedule/task-id ?schedule-task-id]
                                   [?schedule :schedule/deleted false]
                                   [?schedule :schedule/order ?schedule-order]
                                   [?schedule :schedule/tenant ?schedule-tenant]]
                                 @checklist-conn
                                 tenant)]
-    (for [[schedule-order schedule-id-str schedule-type schedule-card schedule-context schedule-schedule] schedules]
+    (for [[schedule-order schedule-id-str schedule-type schedule-card schedule-context schedule-schedule schedule-task-id] schedules]
       {:schedule-id schedule-id-str
        :schedule-type schedule-type
        :schedule-card schedule-card
        :schedule-context schedule-context
+       :schedule-task-id schedule-task-id
        :schedule schedule-schedule})))
 
 
+(defn- get-schedule-id [tenant id-str]
+  (let [schedule-id (ffirst (datascript/q '[:find (max ?schedule)
+                                            :in $ [?schedule-tenant ?schedule-id-str] %
+                                            :where
+                                            [?schedule :schedule/id-str ?schedule-id-str]
+                                            [?schedule :schedule/tenant ?schedule-tenant]]
+                                          @checklist-conn
+                                          [tenant id-str]))]
+    schedule-id))
+
+
+(defn- schedule-dispatch [tenant schedule-type schedule-card schedule-context]
+  (println "DISPATCH" tenant schedule-type schedule-card schedule-context)
+  (case schedule-type
+    :check (upsert-context! tenant schedule-context true)
+    :uncheck (upsert-context! tenant schedule-context false)
+    :toggle (upsert-context! tenant
+                             schedule-context
+                             (not (get-context-value tenant schedule-context)))
+    :hide (hide-card! tenant schedule-card)
+    :show (show-card! tenant schedule-card)
+    :reset nil
+    nil))
+
+(comment (reset-card! tenant schedule-card))
 (defn upsert-schedule-string! [tenant body]
   (let [document-id (or (get-schedule-string-document-id tenant) -1)
         formatted-string (cljfmt.core/reformat-string body)
         old-schedules (get-schedules tenant)
         evaluated-schedules (schedule-spec/evaluate-expr formatted-string)
-        schedules-to-delete (map #(assoc % :schedule/deleted true)
-                                 (filter #(not (.contains (map :schedule-id evaluated-schedules)
-                                                          (:schedule/id-str %)))
+        order-to-delete (atom -1)
+        schedules-to-delete (map #(hash-map :schedule/deleted true
+                                            :schedule/task-id (:schedule-task-id %)
+                                            :schedule/tenant tenant
+                                            :db/id (get-schedule-id tenant (:schedule-id %)))
+                                 (filter #(and (not (.contains (map :schedule-id evaluated-schedules)
+                                                               (:schedule-id %)))
+                                               (:schedule-id %))
                                          old-schedules))
         schedule-order (atom 0)
         upsertion-data (into [] (concat [{:db/id document-id
@@ -323,18 +403,32 @@
                                                schedule :schedule} evaluated-schedules
                                               :when (not (.contains (map :schedule/id-str schedules-to-delete)
                                                                     schedule-id-str))]
-                                          {:schedule/id-str schedule-id-str
-                                           :schedule/schedule-type schedule-type
-                                           :schedule/schedule-card (or schedule-card false)
-                                           :schedule/schedule-context (or schedule-context false)
-                                           :schedule/schedule-schedule schedule
-                                           :schedule/deleted false
-                                           :schedule/tenant tenant
-                                           :schedule/string-id document-id
-                                           :schedule/order (swap! schedule-order inc)})
+                                          (let [schedule-id (get-schedule-id tenant schedule-id-str)]
+                                            (merge {:db/id (or schedule-id (- -1 @schedule-order))
+                                                    :schedule/id-str schedule-id-str
+                                                    :schedule/schedule-type schedule-type
+                                                    :schedule/schedule-card (or schedule-card false)
+                                                    :schedule/schedule-context (or schedule-context false)
+                                                    :schedule/schedule-schedule schedule
+                                                    :schedule/deleted false
+                                                    :schedule/tenant tenant
+                                                    :schedule/string-id document-id
+                                                    :schedule/order (swap! schedule-order inc)}
+                                                   (when-not schedule-id
+                                                     {:schedule/task-id (timely/start-schedule (timely/scheduled-item schedule
+                                                                                                                      (fn []
+                                                                                                                        (schedule-dispatch tenant
+                                                                                                                                           schedule-type
+                                                                                                                                           schedule-card
+                                                                                                                                           schedule-context))))}))))
                                         schedules-to-delete))]
     (datascript/transact! checklist-conn
                           upsertion-data)
+    (loop [[schedule-to-delete & rest] schedules-to-delete]
+      (when schedule-to-delete
+        (timely/end-schedule (:schedule/task-id schedule-to-delete)))
+      (when rest
+        (recur rest)))
     formatted-string))
 
 
@@ -347,7 +441,8 @@
                                    @checklist-conn
                                    tenant))]
     (or body
-        (str "(reset sample-card (each-minute))\n"))))
+        (str "(reset sample-card (each-minute))" \newline
+             "(toggle :blink (each-minute))" \newline))))
 
 
 (defn init-tenant! [tenant]

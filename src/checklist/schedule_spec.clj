@@ -85,7 +85,7 @@
 
 (defmacro show [schedule-card schedule]
   (let [schedule-card-str (str schedule-card)]
-    {:schedule-id (str "schedule-" (hash [schedule-card-str schedule]))
+    {:schedule-id (str "schedule-" (hash [:show schedule-card-str schedule]))
      :schedule-type :show
      :schedule-card schedule-card-str
      :schedule schedule}))
@@ -99,7 +99,7 @@
 
 (defmacro reset [schedule-card schedule]
   (let [schedule-card-str (str schedule-card)]
-    {:schedule-id (str "schedule-" (hash [schedule-card-str schedule]))
+    {:schedule-id (str "schedule-" (hash [:reset schedule-card-str schedule]))
      :schedule-type :reset
      :schedule-card schedule-card-str
      :schedule schedule}))
@@ -112,7 +112,7 @@
 
 
 (defmacro check [schedule-context schedule]
-  {:schedule-id (str "schedule-" (hash [schedule-context schedule]))
+  {:schedule-id (str "schedule-" (hash [:check schedule-context schedule]))
    :schedule-type :check
    :schedule-context schedule-context
    :schedule schedule})
@@ -125,7 +125,7 @@
 
 
 (defmacro uncheck [schedule-context schedule]
-  {:schedule-id (str "schedule-" (hash [schedule-context schedule]))
+  {:schedule-id (str "schedule-" (hash [:uncheck schedule-context schedule]))
    :schedule-type :uncheck
    :schedule-context schedule-context
    :schedule schedule})
@@ -138,7 +138,7 @@
 
 
 (defmacro toggle [schedule-context schedule]
-  {:schedule-id (str "schedule-" (hash [schedule-context schedule]))
+  {:schedule-id (str "schedule-" (hash [:toggle schedule-context schedule]))
    :schedule-type :toggle
    :schedule-context schedule-context
    :schedule schedule})
