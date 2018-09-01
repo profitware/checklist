@@ -35,7 +35,11 @@
                        [parinfer-codemirror "1.4.2"]]
         :root "resources"}
   :resource {:resource-paths
-             [["resources/node_modules/patternfly/dist/js" {:includes [#".*(\.min)?\.js(\.map)?"]
+             [["resources/src" {:includes [#".*(\.min)?\.js(\.map)?"]
+                                :excludes []
+                                :target-path "resources/public/js"
+                                :extra-values {}}]
+              ["resources/node_modules/patternfly/dist/js" {:includes [#".*(\.min)?\.js(\.map)?"]
                                                             :excludes []
                                                             :target-path "resources/public/js"
                                                             :extra-values {}}]
