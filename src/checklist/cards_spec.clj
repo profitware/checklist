@@ -2,11 +2,17 @@
   (:require [clojure.spec.alpha :as s]))
 
 
+(s/def ::simple-symbol-or-keyword #(re-matches #"^[a-z0-9-]+$" (str (if (keyword? %)
+                                                                      (name %)
+                                                                      (str %)))))
+
+
 (s/def ::checkbox-id string?)
 (s/def ::checkbox-title string?)
 (s/def ::checkbox-disabled boolean?)
 (s/def ::checkbox-checked (s/or :bool boolean?
-                                :kwd keyword?))
+                                :kwd (s/and keyword?
+                                            ::simple-symbol-or-keyword)))
 (s/def ::checkbox-spec (s/keys :req [::checkbox-id
                                      ::checkbox-title]
                                :opt [::checkbox-disabled
@@ -37,7 +43,8 @@
         :ret ::checkbox-spec)
 
 
-(s/def ::card-id string?)
+(s/def ::card-id (s/and string?
+                        ::simple-symbol-or-keyword))
 (s/def ::card-title string?)
 (s/def ::checkboxes-macros (s/or :check (s/cat :smb #{'check}
                                                :str string?)
@@ -55,14 +62,16 @@
 
 
 (s/fdef defcard
-        :args (s/cat :card-id symbol?
+        :args (s/cat :card-id (s/and symbol?
+                                     ::simple-symbol-or-keyword)
                      :card-title string?
                      :card-checkboxes (s/* ::checkboxes-macros))
         :ret ::card-spec)
 
 
 (s/def ::defcard-spec (s/cat :smb #{'defcard}
-                             :name symbol?
+                             :name (s/and symbol?
+                                          ::simple-symbol-or-keyword)
                              :str string?
                              :checkboxes (s/* ::checkboxes-macros)))
 

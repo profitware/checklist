@@ -29,10 +29,18 @@
                                  to-date-obj]]))
 
 
+(s/def ::simple-symbol-or-keyword #(re-matches #"^[a-z0-9-]+$" (str (if (keyword? %)
+                                                                      (name %)
+                                                                      (str %)))))
+
+
 (s/def ::schedule-id string?)
-(s/def ::schedule-type keyword?)
-(s/def ::schedule-card keyword?)
-(s/def ::schedule-context keyword?)
+(s/def ::schedule-type (s/and keyword?
+                              ::simple-symbol-or-keyword))
+(s/def ::schedule-card (s/and keyword?
+                              ::simple-symbol-or-keyword))
+(s/def ::schedule-context (s/and keyword?
+                                 ::simple-symbol-or-keyword))
 (s/def ::schedule (s/keys :req [::minute
                                 ::hour
                                 ::day
@@ -78,7 +86,8 @@
 
 
 (s/fdef hide
-        :args (s/cat :schedule-card symbol?
+        :args (s/cat :schedule-card (s/and symbol?
+                                           ::simple-symbol-or-keyword)
                      :schedule ::schedule-schedule-spec)
         :ret ::schedule-spec)
 
@@ -92,7 +101,8 @@
 
 
 (s/fdef show
-        :args (s/cat :schedule-card symbol?
+        :args (s/cat :schedule-card (s/and symbol?
+                                           ::simple-symbol-or-keyword)
                      :schedule ::schedule-schedule-spec)
         :ret ::schedule-spec)
 
@@ -106,7 +116,8 @@
 
 
 (s/fdef reset
-        :args (s/cat :schedule-card symbol?
+        :args (s/cat :schedule-card (s/and symbol?
+                                           ::simple-symbol-or-keyword)
                      :schedule ::schedule-schedule-spec)
         :ret ::schedule-spec)
 
@@ -119,7 +130,8 @@
 
 
 (s/fdef check
-        :args (s/cat :schedule-context keyword?
+        :args (s/cat :schedule-context (s/and keyword?
+                                              ::simple-symbol-or-keyword)
                      :schedule ::schedule-schedule-spec)
         :ret ::schedule-spec)
 
@@ -132,7 +144,8 @@
 
 
 (s/fdef uncheck
-        :args (s/cat :schedule-context keyword?
+        :args (s/cat :schedule-context (s/and keyword?
+                                              ::simple-symbol-or-keyword)
                      :schedule ::schedule-schedule-spec)
         :ret ::schedule-spec)
 
@@ -145,7 +158,8 @@
 
 
 (s/fdef toggle
-        :args (s/cat :schedule-context keyword?
+        :args (s/cat :schedule-context (s/and keyword?
+                                              ::simple-symbol-or-keyword)
                      :schedule ::schedule-schedule-spec)
         :ret ::schedule-spec)
 
@@ -155,14 +169,16 @@
                                                           "reset"]
                                                          (map symbol)
                                                          set)
-                                               :smb symbol?
+                                               :smb (s/and symbol?
+                                                           ::simple-symbol-or-keyword)
                                                :schedule ::schedule-schedule-spec)
                                    :ctx (s/cat :cmd (->> ["check"
                                                           "uncheck"
                                                           "toggle"]
                                                          (map symbol)
                                                          set)
-                                               :kwd keyword?
+                                               :kwd (s/and keyword?
+                                                           ::simple-symbol-or-keyword)
                                                :schedule ::schedule-schedule-spec)))
 
 

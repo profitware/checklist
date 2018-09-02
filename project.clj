@@ -10,6 +10,7 @@
             [arohner/lein-docker "0.1.4"]
             [lein-cljfmt "0.6.0"]]
   :ring {:handler checklist.web/app
+         :port 5000
          :nrepl {:start? true
                  :port 9998}}
   :dependencies [[org.clojure/core.async "0.4.474"]
@@ -19,7 +20,7 @@
                  [ring/ring-jetty-adapter "1.6.3"]
                  [ring/ring-devel "1.6.3"]
                  [ring/ring-json "0.4.0"]
-                 [ring/ring-anti-forgery "1.3.0"]
+                 [ring/ring-defaults "0.3.2"]
                  [http-kit "2.2.0"]
                  [compojure "1.6.1"]
                  [hiccup "1.0.5"]
@@ -27,7 +28,8 @@
                  [clj-time "0.14.4"]
                  [datascript "0.16.6"]
                  [com.cemerick/friend "0.2.3"]
-                 [factual/timely "0.0.3"]]
+                 [factual/timely "0.0.3"]
+                 [environ "1.1.0"]]
   :npm {:dependencies [[patternfly "3.48.2"]
                        [bootstrap "3.3.7"]
                        [jquery "3.3.1"]

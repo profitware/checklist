@@ -1,5 +1,6 @@
 (ns checklist.db
-  (:require [datascript.core :as datascript]
+  (:require [clojure.tools.logging :as log]
+            [datascript.core :as datascript]
             [cljfmt.core]
             [timely.core :as timely]
             [checklist.cards-spec :as cards-spec]
@@ -423,6 +424,7 @@
                                                     :schedule/string-id document-id
                                                     :schedule/order (swap! schedule-order inc)}
                                                    (when-not schedule-id
+                                                     (log/info (str "Scheduling " schedule-type " for tenant " tenant))
                                                      {:schedule/task-id (timely/start-schedule (timely/scheduled-item schedule
                                                                                                                       (fn []
                                                                                                                         (schedule-dispatch tenant
@@ -466,4 +468,4 @@
                           (get-cards-string tenant))
     (upsert-schedule-string! tenant
                              (get-schedule-string tenant))
-    (println "INIT!")))
+    (log/info (str "Initialized tenant " tenant))))

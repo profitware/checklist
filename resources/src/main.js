@@ -1,4 +1,8 @@
 var initApp = function ($, page_name, token, content) {
+  var htmlDecode = function (input) {
+    var doc = new DOMParser().parseFromString(input, "text/html");
+    return doc.documentElement.textContent;
+  };
   $(function () {
     var alt_pressed = false;
     $('body').keydown(function (event) {
@@ -23,18 +27,19 @@ var initApp = function ($, page_name, token, content) {
       alt_pressed = false;
     });
 
+    $('button.close').click(function () { $(this).closest('.alert').hide(); });
+
     if (page_name === 'cards' || page_name === 'schedule') {
       var contentCodeMirror = CodeMirror(document.getElementById('codemirror'), {
-        value: content,
         theme: 'mdn-like',
         lineNumbers: true,
         autofocus: true,
         styleActiveLine: true,
         matchBrackets: true
       });
+      contentCodeMirror.setValue(htmlDecode(content));
       contentCodeMirror.execCommand('goDocEnd');
       parinferCodeMirror.init(contentCodeMirror);
-      $('button.close').click(function () { $(this).closest('.alert').hide(); });
       $('.action-button').click(function () {
         var payload = {'token': token};
         payload[page_name + '-code'] = contentCodeMirror.getValue();

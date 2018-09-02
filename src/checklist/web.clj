@@ -2,21 +2,27 @@
   (:require [clojure.tools.logging :as log]
             [compojure.core :as compojure]
             [compojure.route :as route]
+            [environ.core :as environ]
             [ring.adapter.jetty :as jetty]
+            [ring.middleware.anti-forgery :as anti-forgery]
             [ring.middleware.cookies :as cookies]
             [ring.middleware.params :as params]
             [ring.middleware.reload :as reload]
             [ring.middleware.session :as session]
             [ring.middleware.json :as json]
-            [ring.middleware.anti-forgery :as anti-forgery]
+            [ring.middleware.defaults :as defaults]
             [ring.util.anti-forgery :as util-anti-forgery]
             [ring.util.response :as response]
             [hiccup.page :as page]
+            [hiccup.util :as util]
             [cemerick.friend :as friend]
             [cemerick.friend.credentials :as credentials]
             [cemerick.friend.workflows :as workflows]
             [checklist.db :as db])
   (:gen-class))
+
+
+(derive ::admin ::user)
 
 
 (def ^:dynamic *tenant* "default")
@@ -59,6 +65,7 @@
 (def page-schedule "schedule")
 (def page-login "login")
 (def page-logout "logout")
+(def page-notfound "notfound")
 
 
 (defn get-menu [page-name]
@@ -70,32 +77,12 @@
 
 (defn get-menu-login [page-name]
   [:ul {:class "nav navbar-nav navbar-right"}
-   (menu page-login "Login")])
+   (menu page-login "Sign in")])
 
 
-(defn get-menu-logout [page-name identity]
+(defn get-menu-logout [page-name]
   [:ul {:class "nav navbar-nav navbar-right"}
-   (menu page-logout (str "Logout [" identity "]"))])
-
-
-(comment defn get-menu-logout [identity]
-  [:ul {:class "nav navbar-nav navbar-right navbar-iconic"}
-   [:li {:class "dropdown"}
-    [:a {:class "btn btn-link dropdown-toggle nav-item-iconic"
-         :id "dropdownProfile"
-         :data-toggle "dropdown"
-         :aria-haspopup "true"
-         :aria-expanded "false"}
-     [:span {:title "Username"
-             :class "fa pficon-user"}]
-     [:span {:class "dropdown-title"}
-      "test"
-      [:span {:class "caret"}]]]
-    [:ul {:class "dropdown-menu"
-          :aria-labelledby "dropdownProfile"}
-     [:li
-      [:a {:href page-logout}
-       "Logout"]]]]])
+   (menu page-logout (str "Logout [" *tenant* "]"))])
 
 
 (defn get-script [page-name auth]
@@ -103,7 +90,7 @@
                               page-cards (db/get-cards-string *tenant*)
                               page-schedule (db/get-schedule-string *tenant*)
                               nil)]
-             (str "initApp($, '" page-name "', '" anti-forgery/*anti-forgery-token* "', `" content "`);")
+             (str "initApp($, '" page-name "', '" anti-forgery/*anti-forgery-token* "', `" (clojure.string/replace (util/escape-html content) #"`" "'") "`);")
              (str "initApp($, '" page-name "', '" anti-forgery/*anti-forgery-token* "');"))])
 
 
@@ -121,7 +108,7 @@
   [:div {:class "form-group"}
    [:label {:class "col-sm-9 control-label"
             :for checkbox-id}
-    checkbox-title]
+    (util/escape-html checkbox-title)]
    [:div {:class "col-sm-3"}
     [:input (into {:type "checkbox"
                    :id checkbox-id
@@ -159,7 +146,7 @@
                       "display: none;")
              :id card-id}
        [:h2 {:class "card-pf-title"}
-        card-title]
+        (util/escape-html card-title)]
        [:div {:class "card-pf-body"}
         [:form {:class "form-horizontal"}
          (for [{checkbox-id :checkbox-id
@@ -227,7 +214,7 @@
     "\nWait while job is running"]])
 
 
-(defn get-login-form []
+(defn get-login-form [request]
   [:div {:class "col-xs-12 col-sm-9"}
    [:p {:class "pull-right visible-xs"}
     [:button {:class "btn btn-primary btn-xs"
@@ -235,7 +222,18 @@
               :data-toggle "offcanvas"}
      "Toggle nav"]]
 
+   (when (get-in request [:params :login_failed])
+     [:div {:class "alert alert-danger alert-dismissable"}
+      [:button {:type "button"
+                :class "close"
+                :aria-label "Close"}
+       [:span {:class "pficon pficon-close"}]]
+      [:span {:class "pficon pficon-error-circle-o"}]
+      [:strong "Error!"]
+      " Wrong login or password!"])
+
    [:form {:class "form-horizontal"
+           :accept-charset "UTF-8"
            :method "POST"}
     (util-anti-forgery/anti-forgery-field)
     [:div {:class "form-group"}
@@ -247,7 +245,10 @@
                :id "username"
                :name "username"
                :class "form-control"
-               :autofocus "autofocus"}]]]
+               :autofocus "autofocus"
+               :autocapitalize "off"
+               :autocorrect "off"
+               :autocomplete "off"}]]]
     [:div {:class "form-group"}
      [:label {:class "col-sm-3 control-label"
               :for "password"}
@@ -256,15 +257,17 @@
       [:input {:type "password"
                :id "password"
                :name "password"
-               :class "form-control"}]]]
+               :class "form-control"
+               :autocomplete "off"}]]]
     [:div {:style "padding-top: 10px; padding-bottom: 10px;"
            :class "row"}
      [:div {:class "col-sm-6 col-sm-offset-3"}
       [:span
        [:button {:type "submit"
                  :id "submit"
-                 :class "btn btn-primary"}
-        "Login"]]]]]])
+                 :class "btn btn-primary"
+                 :data-disable-with "Signing in..."}
+        "Sign in"]]]]]])
 
 
 (defn get-empty-state [empty-state]
@@ -285,6 +288,11 @@
     [:a {:class "btn btn-default"
          :href "schedule"}
      "Check Schedules"]]])
+
+
+(defn get-not-found []
+  [:div {:class "blank-slate-pf"}
+   [:h1 "Page not found"]])
 
 
 (defn get-page [page-name request]
@@ -312,7 +320,7 @@
                           :class "collapse navbar-collapse"}
                     (get-menu page-name)
                     (if (friend/authorized? #{::user} auth)
-                      (get-menu-logout page-name "test")
+                      (get-menu-logout page-name)
                       (get-menu-login page-name))]]]
 
                  [:div {:class "container-fluid"
@@ -327,19 +335,18 @@
 
                  [:div {:class "container-fluid container-cards-pf"}
                   [:div {:class "row row-offcanvas row-offcanvas-right row-cards-pf"}
-                   (if (.contains [page-cards page-schedule]
-                                  page-name)
-                     (get-editor page-name)
-                     (if (= page-name page-login)
-                       (get-login-form)
-                       (let [tenant-cards (db/get-cards *tenant*)]
-                         [:div
-                          (get-empty-state (reduce (fn [acc card]
-                                                     (and acc
-                                                          (:card-hidden card)))
-                                                   true
-                                                   tenant-cards))
-                          (get-cards tenant-cards)])))
+                   (cond
+                     (.contains [page-cards page-schedule] page-name) (get-editor page-name)
+                     (= page-name page-login) (get-login-form request)
+                     (= page-name page-today) (let [tenant-cards (db/get-cards *tenant*)]
+                                                [:div
+                                                 (get-empty-state (reduce (fn [acc card]
+                                                                            (and acc
+                                                                                 (:card-hidden card)))
+                                                                          true
+                                                                          tenant-cards))
+                                                 (get-cards tenant-cards)])
+                     :else (get-not-found))
                    (get-sidebar page-name auth)]]
 
                  (when (.contains [page-cards page-schedule]
@@ -358,14 +365,18 @@
 
 
 (defn get-ajax [page-name request]
-  (response/response {:cards (map #(assoc %
-                                          :card-checkboxes (reduce (fn [acc checkbox]
-                                                                     (conj acc
-                                                                           (assoc checkbox
-                                                                                  :checkbox-checked (checkbox-checked? checkbox))))
-                                                                   []
-                                                                   (:card-checkboxes %)))
-                                  (db/get-cards *tenant*))}))
+  (response/response (if (= page-name page-today)
+                       {:cards (map #(assoc %
+                                            :card-title (util/escape-html (:card-title %))
+                                            :card-checkboxes (reduce (fn [acc checkbox]
+                                                                       (conj acc
+                                                                             (assoc checkbox
+                                                                                    :checkbox-title (util/escape-html (:checkbox-title checkbox))
+                                                                                    :checkbox-checked (checkbox-checked? checkbox))))
+                                                                     []
+                                                                     (:card-checkboxes %)))
+                                    (db/get-cards *tenant*))}
+                       (response/not-found (get-page page-notfound request)))))
 
 
 (defn post-ajax [page-name request]
@@ -386,7 +397,6 @@
                 card input-json
                 {checked-ids :checked} card
                 old-cards (db/get-cards *tenant*)
-                
                 old-card (first (filter #(= (:card-id %)
                                             (:card-id card))
                                         old-cards))]
@@ -401,17 +411,25 @@
                                                              []
                                                              (:card-checkboxes old-card)))]
                 (db/upsert-card! *tenant* new-card)
-                (response/response {:cards [new-card]}))
-              (response/response {:cards []})))))
+                (response/response {:cards [(assoc new-card
+                                                   :card-title (util/escape-html (:card-title new-card))
+                                                   :card-checkboxes (reduce (fn [acc checkbox]
+                                                                              (conj acc
+                                                                                    (assoc checkbox
+                                                                                           :checkbox-title (util/escape-html (:checkbox-title checkbox)))))
+                                                                            []
+                                                                            (:card-checkboxes new-card)))]}))
+                                    (response/response {:cards []})))))
 
 
 (defmacro get-routes [page-name & url]
   (let [web-url (or (first url)
                     (str "/" page-name))
         page-symbol (symbol (str "page-" page-name))]
-    `(list (compojure/GET ~web-url request# (get-page ~page-symbol request#))
-           (compojure/GET (str "/" ~page-name "/ajax") request# (get-ajax ~page-symbol request#))
-           (compojure/POST (str "/" ~page-name "/ajax") request# (post-ajax ~page-symbol request#)))))
+    `(concat (list (compojure/GET ~web-url request# (get-page ~page-symbol request#))
+                   (compojure/POST (str "/" ~page-name "/ajax") request# (post-ajax ~page-symbol request#)))
+             (when (= ~web-url "/")
+               (list (compojure/GET (str "/" ~page-name "/ajax") request# (get-ajax ~page-symbol request#)))))))
 
 
 (defmacro get-user-routes []
@@ -426,7 +444,7 @@
 (defmacro get-all-routes [user-routes]
   `(compojure/defroutes routes
      (compojure/GET "/favicon.ico" request# "")
-     (compojure/GET "/login" request# (get-page page-login {}))
+     (compojure/GET "/login" request# (get-page page-login request#))
      ~@(get-routes "today" "/")
 
      (route/resources "/")
@@ -434,7 +452,7 @@
      (friend/wrap-authorize ~user-routes #{::user})
      (friend/logout (compojure/ANY "/logout" request# (response/redirect "/")))
 
-     (route/not-found "<h1>Not found</h1>")))
+     (route/not-found (get-page page-notfound {}))))
 
 
 (get-all-routes user-routes)
@@ -445,30 +463,45 @@
     (binding [*tenant* (or (:identity (friend/current-authentication))
                            "default")]
       (db/init-tenant! *tenant*)
-      (handler (assoc request
-                      :tenant *tenant*)))))
+      (handler request))))
+
+
+(comment defn wrap-json-response [handler & [{:as options}]]
+  (fn
+    ([request]
+     (json/json-response (handler request) options))
+    ([request respond raise]
+     (handler request (fn [response]
+                        (respond (json/json-response response options))) raise))))
 
 
 (defn- get-custom-token [request]
-  (or (get-in request [:body :token])
-      (get-in request [:form-params "__anti-forgery-token"])))
+  (let [token (or (get-in request [:body :token])
+                  (get-in request [:params :__anti-forgery-token]))]
+    token))
+
+
+(defn- check-credentials [{:keys [username password] :as creds}]
+  (when (and (= (environ/env :checklist-admin-password) password)
+             (= (environ/env :checklist-admin-user) username))
+    {:identity username
+     :roles #{::admin}}))
 
 
 (def app (-> routes
-             (wrap-init-tenant)
              (json/wrap-json-response)
-             (friend/authenticate {:workflows [(workflows/interactive-form :credential-fn (fn [{:keys [username password] :as creds}]
-                                                                                            (when (and (= "test" password)
-                                                                                                       (= "test" username))
-                                                                                              {:identity username
-                                                                                               :roles #{::user}})))]})
+             (wrap-init-tenant)
+             (friend/authenticate {:workflows [(workflows/interactive-form :credential-fn check-credentials)]})
              (anti-forgery/wrap-anti-forgery {:read-token get-custom-token})
              (json/wrap-json-body {:keywords? true :bigdecimals? true})
-             (params/wrap-params)
-             (session/wrap-session)
-             (cookies/wrap-cookies)))
+             (defaults/wrap-defaults (-> defaults/site-defaults
+                                         (assoc-in [:security :anti-forgery] false)
+                                         (assoc-in [:security :ssl-redirect] false)
+                                         (assoc-in [:security :hsts] false)
+                                         (assoc-in [:params :multipart] false)
+                                         (assoc :proxy true)))))
 
 
 (defn main []
   (jetty/run-jetty (reload/wrap-reload #'app)
-                   {:port 3000}))
+                   {:port 5000}))

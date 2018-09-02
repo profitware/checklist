@@ -6,4 +6,4 @@
 
 (defn -main []
   (jetty/run-jetty #'web/app
-                   {:port 3000}))
+                   {:port 5000}))
