@@ -228,11 +228,19 @@
 
 
 (defn reset-card! [tenant card-id-symbol]
-  (let [document-id (get-card-document-id tenant {:card-id card-id-symbol})]
-    (datascript/transact! checklist-conn
-                          (map #(assoc % :checkbox/checked false)
-                               (filter #(not (:checkbox/disabled %))
-                                       (get-old-checkboxes tenant document-id))))))
+  (loop [[card & rest-cards] (get-cards tenant)]
+    (when (= (str (:card-id card))
+             (str card-id-symbol))
+      (upsert-card! tenant (assoc card
+                                  :card-checkboxes (reduce (fn [acc checkbox]
+                                                             (conj acc (if (:checkbox-disabled checkbox)
+                                                                         checkbox
+                                                                         (assoc checkbox
+                                                                                :checkbox-checked false))))
+                                                           []
+                                                           (:card-checkboxes card)))))
+    (when rest-cards
+      (recur rest-cards))))
 
 
 (defn- get-cards-string-document-id [tenant]
@@ -257,7 +265,7 @@
                           upsertion-data)
     (loop [[old-card & rest-old-cards] old-cards]
       (when old-card
-        (when-not (.contains (keys evaluated-cards-map)
+        (when-not (.contains (or (keys evaluated-cards-map) [])
                              (:card-id old-card))
           (delete-card! tenant old-card)))
       (when rest-old-cards
@@ -295,7 +303,6 @@
                                       [?context :context/tenant ?context-tenant]]
                                     @checklist-conn
                                     [tenant context-id-str]))]
-    (println "!!!" tenant context-id-str value)
     (or value
         false)))
 
@@ -365,19 +372,20 @@
 
 
 (defn- schedule-dispatch [tenant schedule-type schedule-card schedule-context]
-  (println "DISPATCH" tenant schedule-type schedule-card schedule-context)
-  (case schedule-type
-    :check (upsert-context! tenant schedule-context true)
-    :uncheck (upsert-context! tenant schedule-context false)
-    :toggle (upsert-context! tenant
-                             schedule-context
-                             (not (get-context-value tenant schedule-context)))
-    :hide (hide-card! tenant schedule-card)
-    :show (show-card! tenant schedule-card)
-    :reset nil
-    nil))
+  (let [result (case schedule-type
+                 :check (upsert-context! tenant schedule-context true)
+                 :uncheck (upsert-context! tenant schedule-context false)
+                 :toggle (upsert-context! tenant
+                                          schedule-context
+                                          (not (get-context-value tenant schedule-context)))
+                 :hide (hide-card! tenant schedule-card)
+                 :show (show-card! tenant schedule-card)
+                 :reset (reset-card! tenant schedule-card)
+                 nil)]
+    result))
 
-(comment (reset-card! tenant schedule-card))
+
+
 (defn upsert-schedule-string! [tenant body]
   (let [document-id (or (get-schedule-string-document-id tenant) -1)
         formatted-string (cljfmt.core/reformat-string body)
@@ -457,4 +465,5 @@
     (upsert-cards-string! tenant
                           (get-cards-string tenant))
     (upsert-schedule-string! tenant
-                             (get-schedule-string tenant))))
+                             (get-schedule-string tenant))
+    (println "INIT!")))

@@ -13,6 +13,8 @@ var initApp = function ($, page_name, content) {
         case 83:
           window.location.href = 'schedule';
           break;
+        case 76:
+          window.location.href = 'logout';
         }
         event.preventDefault();
       }
@@ -59,6 +61,47 @@ var initApp = function ($, page_name, content) {
       });
     } else {
       var checkbox_selector = 'input[type=\checkbox\]';
+
+      var got_data_callback_factory = function ($card_pf) {
+        var update_checkboxes = function($card_pf, data) {
+          var card_id = $card_pf.attr('id'),
+              cards = data.cards,
+              checked_count = 0;
+          if (cards) {
+            $(cards).each(function () {
+              if (this['card-id'] == card_id) {
+                $(this['card-checkboxes']).each(function () {
+                  var checked_this = this['checkbox-checked'];
+                  if (checked_this) {
+                    checked_count += 1;
+                  }
+                  $card_pf.find(checkbox_selector + '#' + this['checkbox-id'])
+                    .prop('checked', checked_this);
+                });
+              }
+            });
+          }
+          if (checked_count == $card_pf.find(checkbox_selector).length) {
+            $card_pf.addClass('card-disabled');
+          } else {
+            $card_pf.removeClass('card-disabled');
+          }
+        };
+
+
+        return function (data) {
+          if (data.cards) {
+            if ($card_pf) {
+              update_checkboxes($card_pf, data);
+            } else {
+              $('div.cards-content').find('.card-pf').each(function () {
+                update_checkboxes($(this), data);
+              });
+            }
+          }
+        }
+      };
+
       $(checkbox_selector).click(function () {
         var $card_pf = $(this).closest('.card-pf'),
             card_id = $card_pf.attr('id'),
@@ -73,30 +116,16 @@ var initApp = function ($, page_name, content) {
           url: page_name + '/ajax',
           data: JSON.stringify(payload),
           contentType: 'application/json'
-        }).done(function (data) {
-          var cards = data.cards,
-              checked_count = 0;
-          if (cards) {
-            $(cards).each(function () {
-              if (this['card-id'] == card_id) {
-                $(this['card-checkboxes']).each(function () {
-                  var checked_this = this['checkbox-checked'];
-                  if (checked_this) {
-                    checked_count += 1;
-                  }
-                  $card_pf.find(checkbox_selector + '#' + this['checkbox-id'])
-                    .attr('checked', checked_this ? 'checked' : undefined);
-                });
-              }
-            });
-          }
-          if (checked_count == $card_pf.find(checkbox_selector).length) {
-            $card_pf.addClass('card-disabled');
-          } else {
-            $card_pf.removeClass('card-disabled');
-          }
-        });
+        }).done(got_data_callback_factory($card_pf));
       });
+
+      setInterval(function () {
+        $.ajax({
+          type: 'GET',
+          url: page_name + '/ajax',
+          contentType: 'application/json'
+        }).done(got_data_callback_factory());
+      }, 30 * 1000);
     }
   });
 };

@@ -59,6 +59,7 @@
 (def page-cards "cards")
 (def page-schedule "schedule")
 (def page-login "login")
+(def page-logout "logout")
 
 
 (defn get-menu [page-name]
@@ -75,6 +76,36 @@
              [:ul {:class "dropdown-menu"}]])])
 
 
+(defn get-menu-login [page-name]
+  [:ul {:class "nav navbar-nav navbar-right"}
+   (menu page-login "Login")])
+
+
+(defn get-menu-logout [page-name identity]
+  [:ul {:class "nav navbar-nav navbar-right"}
+   (menu page-logout (str "Logout [" identity "]"))])
+
+
+(comment defn get-menu-logout [identity]
+  [:ul {:class "nav navbar-nav navbar-right navbar-iconic"}
+   [:li {:class "dropdown"}
+    [:a {:class "btn btn-link dropdown-toggle nav-item-iconic"
+         :id "dropdownProfile"
+         :data-toggle "dropdown"
+         :aria-haspopup "true"
+         :aria-expanded "false"}
+     [:span {:title "Username"
+             :class "fa pficon-user"}]
+     [:span {:class "dropdown-title"}
+      "test"
+      [:span {:class "caret"}]]]
+    [:ul {:class "dropdown-menu"
+          :aria-labelledby "dropdownProfile"}
+     [:li
+      [:a {:href page-logout}
+       "Logout"]]]]])
+
+
 (defn get-script [page-name auth]
   [:script (if-let [content (condp = page-name
                               page-cards (db/get-cards-string tenant)
@@ -84,8 +115,17 @@
              (str "initApp($, '" page-name "');"))])
 
 
+(defn- checkbox-checked? [tenant {checkbox-checked :checkbox-checked
+                                  checkbox-disabled :checkbox-disabled}]
+  (or (and (not checkbox-disabled)
+           checkbox-checked)
+      (and checkbox-disabled
+           (if (boolean? checkbox-checked)
+             checkbox-checked
+             (db/get-context-value tenant checkbox-checked)))))
+
+
 (defn get-checkbox [checkbox-id checkbox-title checkbox-checked checkbox-disabled]
-  (println "???" checkbox-title checkbox-disabled checkbox-checked)
   [:div {:class "form-group"}
    [:label {:class "col-sm-9 control-label"
             :for checkbox-id}
@@ -95,19 +135,16 @@
                    :id checkbox-id
                    :name checkbox-id
                    :class "form-control"}
-                  [(when (or (and (not checkbox-disabled)
-                                  checkbox-checked)
-                             (and checkbox-disabled
-                                  (if (boolean? checkbox-checked)
-                                    checkbox-checked
-                                    (db/get-context-value tenant checkbox-checked))))
+                  [(when (checkbox-checked? tenant
+                                            {:checkbox-checked checkbox-checked
+                                             :checkbox-disabled checkbox-disabled}) 
                      [:checked "checked"])
                    (when checkbox-disabled
                      [:disabled "disabled"])])]]])
 
 
 (defn get-cards [cards]
-  [:div {:class "col-xs-12 col-sm-9"}
+  [:div {:class "col-xs-12 col-sm-9 cards-content"}
    [:p {:class "pull-right visible-xs"}
     [:button {:class "btn btn-primary btn-xs"
               :type "button"
@@ -237,66 +274,99 @@
         "Login"]]]]]])
 
 
-(defn get-page [page-name auth]
-  (page/html5 head
-              [:body {:class "cards-pf"}
-               [:nav {:class "navbar navbar-inverse"}
-                [:div {:class "container-fluid"}
-                 [:div {:class "navbar-header"}
-                  [:button {:class "navbar-toggle collapsed"
-                            :type "button"
-                            :data-toggle "collapse"
-                            :data-target "#navbar"
-                            :aria-expanded "false"
-                            :aria-controls "navbar"}
-                   [:span {:class "sr-only"} "Toggle navigation"]
-                   [:span {:class "icon-bar"}]
-                   [:span {:class "icon-bar"}]
-                   [:span {:class "icon-bar"}]]
-                  [:a {:class "navbar-brand"
-                       :href "/"}
-                   "Checklist"]]
-                 [:div {:id "navbar"
-                        :class "collapse navbar-collapse"}
-                  (get-menu page-name)]]]
+(defn get-empty-state []
+  [:div {:class "blank-slate-pf"
+         :id "blank"}
+   [:div {:class "blank-slate-pf-icon"}
+    [:span {:class "pficon pficon pficon-add-circle-o"}]]
+   [:h1 "No Cards for Today"]
+   [:p "Well, it seems that you don't have anything to do for today. Or you just haven't added anything yet."]
+   [:p "In any case, you may perform some actions to check the reasons for this."]
+   [:div {:class "blank-slate-pf-main-action"}
+    [:a {:class "btn btn-primary btn-lg"
+         :href "cards"}
+     "Add Cards"]]
+   [:div {:class "blank-slate-pf-secondary-action"}
+    [:a {:class "btn btn-default"
+         :href "schedule"}
+     "Check Schedules"]]])
 
-               [:div {:class "container-fluid"
-                      :style "display: none;"}
-                [:div {:class "row toolbar-pf"}
-                 [:div {:class "col-sm-12"}
-                  [:form {:class "toolbar-pf-actions"}
-                   [:div {:class "form-group"}
-                    [:button {:class "btn btn-default"
-                              :type "button"}
-                     "Action"]]]]]]
 
-               [:div {:class "container-fluid container-cards-pf"}
-                [:div {:class "row row-offcanvas row-offcanvas-right row-cards-pf"}
-                 (if (.contains [page-cards page-schedule]
-                                page-name)
-                   (get-editor page-name)
-                   (if (= page-name page-login)
-                     (get-login-form)
-                     (get-cards (db/get-cards tenant))))
-                 (get-sidebar page-name auth)]]
+(defn get-page [page-name request]
+  (let [auth (identity request)]
+    (page/html5 head
+                [:body {:class "cards-pf"}
+                 [:nav {:class "navbar navbar-inverse"
+                        :role "navigation"}
+                  [:div {:class "container-fluid"}
+                   [:div {:class "navbar-header"}
+                    [:button {:class "navbar-toggle collapsed"
+                              :type "button"
+                              :data-toggle "collapse"
+                              :data-target "#navbar"
+                              :aria-expanded "false"
+                              :aria-controls "navbar"}
+                     [:span {:class "sr-only"} "Toggle navigation"]
+                     [:span {:class "icon-bar"}]
+                     [:span {:class "icon-bar"}]
+                     [:span {:class "icon-bar"}]]
+                    [:a {:class "navbar-brand"
+                         :href "/"}
+                     "Checklist"]]
+                   [:div {:id "navbar"
+                          :class "collapse navbar-collapse"}
+                    (get-menu page-name)
+                    (if (friend/authorized? #{::user} auth)
+                      (get-menu-logout page-name "test")
+                      (get-menu-login page-name))]]]
 
-               (when (.contains [page-cards page-schedule]
-                                page-name)
-                 [:div {:style "display: hidden;"}
-                  (page/include-js "/js/codemirror.js")
-                  (page/include-js "/js/parinfer.js")
-                  (page/include-js "/js/parinfer-codemirror.js")
-                  (page/include-js "/js/clojure.js")])
-               (page/include-js "/js/jquery.min.js")
-               (page/include-js "/js/bootstrap.min.js")
-               (page/include-js "/js/patternfly.min.js")
-               (page/include-js "/js/patternfly-functions.min.js")
-               (page/include-js "/js/main.js")
-               (get-script page-name auth)]))
+                 [:div {:class "container-fluid"
+                        :style "display: none;"}
+                  [:div {:class "row toolbar-pf"}
+                   [:div {:class "col-sm-12"}
+                    [:form {:class "toolbar-pf-actions"}
+                     [:div {:class "form-group"}
+                      [:button {:class "btn btn-default"
+                                :type "button"}
+                       "Action"]]]]]]
+
+                 [:div {:class "container-fluid container-cards-pf"}
+                  [:div {:class "row row-offcanvas row-offcanvas-right row-cards-pf"}
+                   (if (.contains [page-cards page-schedule]
+                                  page-name)
+                     (get-editor page-name)
+                     (if (= page-name page-login)
+                       (get-login-form)
+                       (let [tenant-cards (db/get-cards tenant)]
+                         (if (empty? tenant-cards)
+                           (get-empty-state)
+                           (get-cards tenant-cards)))))
+                   (get-sidebar page-name auth)]]
+
+                 (when (.contains [page-cards page-schedule]
+                                  page-name)
+                   [:div {:style "display: hidden;"}
+                    (page/include-js "/js/codemirror.js")
+                    (page/include-js "/js/parinfer.js")
+                    (page/include-js "/js/parinfer-codemirror.js")
+                    (page/include-js "/js/clojure.js")])
+                 (page/include-js "/js/jquery.min.js")
+                 (page/include-js "/js/bootstrap.min.js")
+                 (page/include-js "/js/patternfly.min.js")
+                 (page/include-js "/js/patternfly-functions.min.js")
+                 (page/include-js "/js/main.js")
+                 (get-script page-name auth)])))
 
 
 (defn get-ajax [page-name request]
-  (response/response {:hello 1}))
+  (response/response {:cards (map #(assoc %
+                                          :card-checkboxes (reduce (fn [acc checkbox]
+                                                                     (conj acc
+                                                                           (assoc checkbox
+                                                                                  :checkbox-checked (checkbox-checked? tenant checkbox))))
+                                                                   []
+                                                                   (:card-checkboxes %)))
+                                  (db/get-cards tenant))}))
 
 
 (defn post-ajax [page-name request]
@@ -324,7 +394,7 @@
             (if old-card
               (let [new-card (assoc old-card
                                     :card-checkboxes (reduce (fn [acc old-checkbox]
-                                                               (conj acc (if (:disabled old-checkbox)
+                                                               (conj acc (if (:checkbox-disabled old-checkbox)
                                                                            old-checkbox
                                                                            (assoc old-checkbox
                                                                                   :checkbox-checked (.contains checked-ids
@@ -340,7 +410,7 @@
   (let [web-url (or (first url)
                     (str "/" page-name))
         page-symbol (symbol (str "page-" page-name))]
-    `(list (compojure/GET ~web-url request# (get-page ~page-symbol (get request# :basic-authentication)))
+    `(list (compojure/GET ~web-url request# (get-page ~page-symbol request#))
            (compojure/GET (str "/" ~page-name "/ajax") request# (get-ajax ~page-symbol request#))
            (compojure/POST (str "/" ~page-name "/ajax") request# (post-ajax ~page-symbol request#)))))
 
@@ -393,5 +463,5 @@
 
 
 (defn main []
-  (jetty/run-jetty (reload/wrap-reload app)
+  (jetty/run-jetty (reload/wrap-reload #'app)
                    {:port 3000}))
