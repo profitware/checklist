@@ -1,4 +1,4 @@
-var initApp = function ($, page_name, content) {
+var initApp = function ($, page_name, token, content) {
   $(function () {
     var alt_pressed = false;
     $('body').keydown(function (event) {
@@ -36,7 +36,7 @@ var initApp = function ($, page_name, content) {
       parinferCodeMirror.init(contentCodeMirror);
       $('button.close').click(function () { $(this).closest('.alert').hide(); });
       $('.action-button').click(function () {
-        var payload = {};
+        var payload = {'token': token};
         payload[page_name + '-code'] = contentCodeMirror.getValue();
         $('.alert-danger').hide();
         $('.alert-success').hide();
@@ -66,10 +66,12 @@ var initApp = function ($, page_name, content) {
         var update_checkboxes = function($card_pf, data) {
           var card_id = $card_pf.attr('id'),
               cards = data.cards,
-              checked_count = 0;
+              checked_count = 0,
+              card_should_be_hidden = false;
           if (cards) {
             $(cards).each(function () {
               if (this['card-id'] == card_id) {
+                card_should_be_hidden = this['card-hidden'];
                 $(this['card-checkboxes']).each(function () {
                   var checked_this = this['checkbox-checked'];
                   if (checked_this) {
@@ -81,13 +83,17 @@ var initApp = function ($, page_name, content) {
               }
             });
           }
+          if (card_should_be_hidden) {
+            $card_pf.hide();
+          } else {
+            $card_pf.show();
+          }
           if (checked_count == $card_pf.find(checkbox_selector).length) {
             $card_pf.addClass('card-disabled');
           } else {
             $card_pf.removeClass('card-disabled');
           }
         };
-
 
         return function (data) {
           if (data.cards) {
@@ -99,13 +105,19 @@ var initApp = function ($, page_name, content) {
               });
             }
           }
-        }
+          if ($('div.card-pf:visible').length > 0) {
+            $('div#blank').hide();
+          } else {
+            $('div#blank').show();
+          }
+        };
       };
 
       $(checkbox_selector).click(function () {
         var $card_pf = $(this).closest('.card-pf'),
             card_id = $card_pf.attr('id'),
             payload = {
+              'token': token,
               'card-id': card_id,
               'checked': $card_pf.find(checkbox_selector + ':checked').map(function (i, el) {
                 return $(this).attr('name');

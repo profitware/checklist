@@ -1,5 +1,6 @@
 (ns checklist.web
-  (:require [compojure.core :as compojure]
+  (:require [clojure.tools.logging :as log]
+            [compojure.core :as compojure]
             [compojure.route :as route]
             [ring.adapter.jetty :as jetty]
             [ring.middleware.cookies :as cookies]
@@ -7,6 +8,8 @@
             [ring.middleware.reload :as reload]
             [ring.middleware.session :as session]
             [ring.middleware.json :as json]
+            [ring.middleware.anti-forgery :as anti-forgery]
+            [ring.util.anti-forgery :as util-anti-forgery]
             [ring.util.response :as response]
             [hiccup.page :as page]
             [cemerick.friend :as friend]
@@ -16,11 +19,7 @@
   (:gen-class))
 
 
-(defn auth-ok? [user pass]
-  true)
-
-
-(def tenant "general")
+(def ^:dynamic *tenant* "default")
 
 
 (def head
@@ -66,14 +65,7 @@
   [:ul {:class "nav navbar-nav navbar-primary"}
    (menu page-today "Today" "/")
    (menu page-cards "Cards")
-   (menu page-schedule "Schedule")
-   (comment [:li {:class "dropdown"}
-             [:a {:href "#0"
-                  :class "dropdown-toggle"
-                  :data-toggle "dropdown"}
-              "Settings"
-              [:b {:class "caret"}]]
-             [:ul {:class "dropdown-menu"}]])])
+   (menu page-schedule "Schedule")])
 
 
 (defn get-menu-login [page-name]
@@ -108,21 +100,21 @@
 
 (defn get-script [page-name auth]
   [:script (if-let [content (condp = page-name
-                              page-cards (db/get-cards-string tenant)
-                              page-schedule (db/get-schedule-string tenant)
+                              page-cards (db/get-cards-string *tenant*)
+                              page-schedule (db/get-schedule-string *tenant*)
                               nil)]
-             (str "initApp($, '" page-name "', `" content "`);")
-             (str "initApp($, '" page-name "');"))])
+             (str "initApp($, '" page-name "', '" anti-forgery/*anti-forgery-token* "', `" content "`);")
+             (str "initApp($, '" page-name "', '" anti-forgery/*anti-forgery-token* "');"))])
 
 
-(defn- checkbox-checked? [tenant {checkbox-checked :checkbox-checked
-                                  checkbox-disabled :checkbox-disabled}]
+(defn- checkbox-checked? [{checkbox-checked :checkbox-checked
+                           checkbox-disabled :checkbox-disabled}]
   (or (and (not checkbox-disabled)
            checkbox-checked)
       (and checkbox-disabled
            (if (boolean? checkbox-checked)
              checkbox-checked
-             (db/get-context-value tenant checkbox-checked)))))
+             (db/get-context-value *tenant* checkbox-checked)))))
 
 
 (defn get-checkbox [checkbox-id checkbox-title checkbox-checked checkbox-disabled]
@@ -135,8 +127,7 @@
                    :id checkbox-id
                    :name checkbox-id
                    :class "form-control"}
-                  [(when (checkbox-checked? tenant
-                                            {:checkbox-checked checkbox-checked
+                  [(when (checkbox-checked? {:checkbox-checked checkbox-checked
                                              :checkbox-disabled checkbox-disabled}) 
                      [:checked "checked"])
                    (when checkbox-disabled
@@ -153,18 +144,19 @@
    (for [{card-id :card-id
           card-title :card-title
           card-hidden :card-hidden
-          card-checkboxes :card-checkboxes} cards
-         :when (not card-hidden)]
+          card-checkboxes :card-checkboxes} cards]
      [:div {:class "col-xs-6 col-sm-4 col-md-4"}
       [:div {:class (str "card-pf"
                          (when (reduce (fn [acc checkbox]
                                          (let [checked (get checkbox :checkbox-checked)]
                                            (and acc (or (= checked true)
                                                         (and (keyword? checked)
-                                                             (db/get-context-value tenant checked))))))
+                                                             (db/get-context-value *tenant* checked))))))
                                        true
                                        card-checkboxes)
                            " card-disabled"))
+             :style (when card-hidden
+                      "display: none;")
              :id card-id}
        [:h2 {:class "card-pf-title"}
         card-title]
@@ -245,6 +237,7 @@
 
    [:form {:class "form-horizontal"
            :method "POST"}
+    (util-anti-forgery/anti-forgery-field)
     [:div {:class "form-group"}
      [:label {:class "col-sm-3 control-label"
               :for "username"}
@@ -274,8 +267,10 @@
         "Login"]]]]]])
 
 
-(defn get-empty-state []
+(defn get-empty-state [empty-state]
   [:div {:class "blank-slate-pf"
+         :style (when-not empty-state
+                  "display: none;")
          :id "blank"}
    [:div {:class "blank-slate-pf-icon"}
     [:span {:class "pficon pficon pficon-add-circle-o"}]]
@@ -337,10 +332,14 @@
                      (get-editor page-name)
                      (if (= page-name page-login)
                        (get-login-form)
-                       (let [tenant-cards (db/get-cards tenant)]
-                         (if (empty? tenant-cards)
-                           (get-empty-state)
-                           (get-cards tenant-cards)))))
+                       (let [tenant-cards (db/get-cards *tenant*)]
+                         [:div
+                          (get-empty-state (reduce (fn [acc card]
+                                                     (and acc
+                                                          (:card-hidden card)))
+                                                   true
+                                                   tenant-cards))
+                          (get-cards tenant-cards)])))
                    (get-sidebar page-name auth)]]
 
                  (when (.contains [page-cards page-schedule]
@@ -363,10 +362,10 @@
                                           :card-checkboxes (reduce (fn [acc checkbox]
                                                                      (conj acc
                                                                            (assoc checkbox
-                                                                                  :checkbox-checked (checkbox-checked? tenant checkbox))))
+                                                                                  :checkbox-checked (checkbox-checked? checkbox))))
                                                                    []
                                                                    (:card-checkboxes %)))
-                                  (db/get-cards tenant))}))
+                                  (db/get-cards *tenant*))}))
 
 
 (defn post-ajax [page-name request]
@@ -374,19 +373,19 @@
     (= page-name page-cards) (let [{input-json :body} request
                                    cards-code (:cards-code input-json)]
                                (if-let [cards-expr (db/expression-of-type :cards cards-code)]
-                                 (let [formatted-string (db/upsert-cards-string! tenant cards-code)]
+                                 (let [formatted-string (db/upsert-cards-string! *tenant* cards-code)]
                                    (response/response {:cards-code formatted-string}))
                                  (response/response {:error "Cannot evaluate expression"})))
     (= page-name page-schedule) (let [{input-json :body} request
                                       schedule-code (:schedule-code input-json)]
                                   (if-let [schedule-expr (db/expression-of-type :schedule schedule-code)]
-                                    (let [formatted-string (db/upsert-schedule-string! tenant schedule-code)]
+                                    (let [formatted-string (db/upsert-schedule-string! *tenant* schedule-code)]
                                       (response/response {:schedule-code formatted-string}))
                                     (response/response {:error "Cannot evaluate expression"})))
     :else (let [{input-json :body} request
                 card input-json
                 {checked-ids :checked} card
-                old-cards (db/get-cards tenant)
+                old-cards (db/get-cards *tenant*)
                 
                 old-card (first (filter #(= (:card-id %)
                                             (:card-id card))
@@ -401,7 +400,7 @@
                                                                                                                (:checkbox-id old-checkbox))))))
                                                              []
                                                              (:card-checkboxes old-card)))]
-                (db/upsert-card! tenant new-card)
+                (db/upsert-card! *tenant* new-card)
                 (response/response {:cards [new-card]}))
               (response/response {:cards []})))))
 
@@ -443,23 +442,31 @@
 
 (defn wrap-init-tenant [handler]
   (fn [request]
-    (db/init-tenant! tenant)
-    (handler request)))
+    (binding [*tenant* (or (:identity (friend/current-authentication))
+                           "default")]
+      (db/init-tenant! *tenant*)
+      (handler (assoc request
+                      :tenant *tenant*)))))
+
+
+(defn- get-custom-token [request]
+  (or (get-in request [:body :token])
+      (get-in request [:form-params "__anti-forgery-token"])))
 
 
 (def app (-> routes
              (wrap-init-tenant)
              (json/wrap-json-response)
-             (json/wrap-json-body {:keywords? true :bigdecimals? true})
              (friend/authenticate {:workflows [(workflows/interactive-form :credential-fn (fn [{:keys [username password] :as creds}]
                                                                                             (when (and (= "test" password)
                                                                                                        (= "test" username))
                                                                                               {:identity username
                                                                                                :roles #{::user}})))]})
+             (anti-forgery/wrap-anti-forgery {:read-token get-custom-token})
+             (json/wrap-json-body {:keywords? true :bigdecimals? true})
              (params/wrap-params)
              (session/wrap-session)
-             (cookies/wrap-cookies)
-             (reload/wrap-reload)))
+             (cookies/wrap-cookies)))
 
 
 (defn main []

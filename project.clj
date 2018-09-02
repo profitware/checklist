@@ -19,7 +19,7 @@
                  [ring/ring-jetty-adapter "1.6.3"]
                  [ring/ring-devel "1.6.3"]
                  [ring/ring-json "0.4.0"]
-                 [ring-basic-authentication "1.0.5"]
+                 [ring/ring-anti-forgery "1.3.0"]
                  [http-kit "2.2.0"]
                  [compojure "1.6.1"]
                  [hiccup "1.0.5"]
