@@ -8,17 +8,17 @@
   (:gen-class))
 
 
-(try
-  (when timely/SCHEDULER
-    (.stop timely/SCHEDULER))
-  (catch IllegalStateException _
-    nil))
+(comment (try
+           (when timely/SCHEDULER
+             (.stop timely/SCHEDULER))
+           (catch IllegalStateException _
+             nil))
 
 
-(try
-  (timely/start-scheduler)
-  (catch IllegalStateException _
-    nil))
+         (try
+           (timely/start-scheduler)
+           (catch IllegalStateException _
+             nil)))
 
 
 (defn expression-of-type [type expression]

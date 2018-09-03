@@ -8,7 +8,8 @@
             [lein-resource "16.9.1"]
             [lein-bump-version "0.1.6"]
             [arohner/lein-docker "0.1.4"]
-            [lein-cljfmt "0.6.0"]]
+            [lein-cljfmt "0.6.0"]
+            [arohner/lein-docker "0.1.4"]]
   :ring {:handler checklist.web/app
          :port 5000
          :nrepl {:start? true
@@ -94,6 +95,10 @@
                                                           :target-path "resources/public/css"
                                                           :extra-values {}}]]
              :skip-stencil [ #"resources/node_modules/patternfly/dist/(img|fonts)/.*" ]}
+  :docker {:repo "profitware/checklist"
+           :ports {5000 5000}
+           :env #{"CHECKLIST_ADMIN_USER"
+                  "CHECKLIST_ADMIN_PASSWORD"}}
   :main ^:skip-aot checklist.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}})

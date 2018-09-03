@@ -432,30 +432,17 @@
                (list (compojure/GET (str "/" ~page-name "/ajax") request# (get-ajax ~page-symbol request#)))))))
 
 
-(defmacro get-user-routes []
-  `(compojure/defroutes user-routes
-     ~@(get-routes "cards")
-     ~@(get-routes "schedule")))
-
-
-(get-user-routes)
-
-
-(defmacro get-all-routes [user-routes]
-  `(compojure/defroutes routes
-     (compojure/GET "/favicon.ico" request# "")
-     (compojure/GET "/login" request# (get-page page-login request#))
-     ~@(get-routes "today" "/")
-
-     (route/resources "/")
-
-     (friend/wrap-authorize ~user-routes #{::user})
-     (friend/logout (compojure/ANY "/logout" request# (response/redirect "/")))
-
-     (route/not-found (get-page page-notfound {}))))
-
-
-(get-all-routes user-routes)
+(def routes (apply compojure/routes
+                   (concat (list (compojure/GET "/favicon.ico" request# "")
+                                 (compojure/GET "/login" request# (get-page page-login request#)))
+                           (get-routes "today" "/")
+                           (list (route/resources "/")
+                                 (friend/wrap-authorize (apply compojure/routes
+                                                               (concat (get-routes "cards")
+                                                                       (get-routes "schedule")))
+                                                        #{::user})
+                                 (friend/logout (compojure/ANY "/logout" request# (response/redirect "/")))                                 
+                                 (route/not-found (get-page page-notfound {}))))))
 
 
 (defn wrap-init-tenant [handler]
@@ -464,15 +451,6 @@
                            "default")]
       (db/init-tenant! *tenant*)
       (handler request))))
-
-
-(comment defn wrap-json-response [handler & [{:as options}]]
-  (fn
-    ([request]
-     (json/json-response (handler request) options))
-    ([request respond raise]
-     (handler request (fn [response]
-                        (respond (json/json-response response options))) raise))))
 
 
 (defn- get-custom-token [request]
