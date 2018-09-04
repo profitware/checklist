@@ -34,6 +34,7 @@
                        :card/title {:db/cardinality :db.cardinality/one}
                        :card/tenant {:db/cardinality :db.cardinality/one}
                        :card/hidden {:db/cardinality :db.cardinality/one}
+                       :card/highlighted {:db/cardinality :db.cardinality/one}
                        :card/deleted {:db/cardinality :db.cardinality/one}
                        :cards-string/id {:db/cardinality :db.cardinality/one
                                         :db/index true
@@ -117,7 +118,8 @@
          card-title :card-title
          card-checkboxes :card-checkboxes
          card-deleted :card-deleted
-         card-hidden :card-hidden} card
+         card-hidden :card-hidden
+         card-highlighted :card-highlighted} card
         document-id (or (get-card-document-id tenant card) -1)
         old-checkboxes (get-old-checkboxes tenant document-id)
         checkboxes-to-delete (map #(assoc % :checkbox/deleted true)
@@ -147,6 +149,7 @@
                                           :card/title card-title
                                           :card/tenant tenant
                                           :card/hidden (or card-hidden false)
+                                          :card/highlighted (or card-highlighted false)
                                           :card/deleted (or card-deleted false)}]
                                         (for [{checkbox-id-str :checkbox-id
                                                checkbox-title :checkbox-title
@@ -178,14 +181,15 @@
 
 
 (defn get-cards [tenant]
-  (let [card-arguments 4
-        cards (datascript/q '[:find ?card-id-symbol ?card-title ?card-tenant ?card-hidden ?checkbox-order ?checkbox-id-str ?checkbox-title ?checkbox-disabled ?checkbox-checked
+  (let [card-arguments 5
+        cards (datascript/q '[:find ?card-id-symbol ?card-title ?card-tenant ?card-hidden ?card-highlighted ?checkbox-order ?checkbox-id-str ?checkbox-title ?checkbox-disabled ?checkbox-checked
                               :in $ ?card-tenant %
                               :where
                               [?card :card/id-symbol ?card-id-symbol]
                               [?card :card/title ?card-title]
                               [?card :card/tenant ?card-tenant]
                               [?card :card/hidden ?card-hidden]
+                              [?card :card/highlighted ?card-highlighted]
                               [?card :card/deleted false]
                               [?checkbox :checkbox/card-id ?card]
                               [?checkbox :checkbox/order ?checkbox-order]
@@ -197,11 +201,12 @@
                             @checklist-conn
                             tenant)]
     (for [card (group-by (partial take card-arguments) cards)]
-      (let [[[card-id-symbol card-title card-tenant card-hidden] checkboxes] card]
+      (let [[[card-id-symbol card-title card-tenant card-hidden card-highlighted] checkboxes] card]
         {:card-id card-id-symbol
          :card-title card-title
          :card-tenant card-tenant
          :card-hidden card-hidden
+         :card-highlighted card-highlighted
          :card-checkboxes (for [checkbox (sort-by #(nth % card-arguments) checkboxes)]
                             (let [[checbox-order checkbox-id-str checkbox-title checkbox-disabled checkbox-checked] (drop card-arguments checkbox)]
                               {:checkbox-id checkbox-id-str
@@ -224,6 +229,24 @@
     (when (= (str (:card-id card))
              (str card-id-symbol))
       (upsert-card! tenant (assoc card :card-hidden false)))
+    (when rest-cards
+      (recur rest-cards))))
+
+
+(defn highlight-card! [tenant card-id-symbol]
+  (loop [[card & rest-cards] (get-cards tenant)]
+    (when (= (str (:card-id card))
+             (str card-id-symbol))
+      (upsert-card! tenant (assoc card :card-highlighted true)))
+    (when rest-cards
+      (recur rest-cards))))
+
+
+(defn unhighlight-card! [tenant card-id-symbol]
+  (loop [[card & rest-cards] (get-cards tenant)]
+    (when (= (str (:card-id card))
+             (str card-id-symbol))
+      (upsert-card! tenant (assoc card :card-highlighted false)))
     (when rest-cards
       (recur rest-cards))))
 
@@ -381,6 +404,8 @@
                                           (not (get-context-value tenant schedule-context)))
                  :hide (hide-card! tenant schedule-card)
                  :show (show-card! tenant schedule-card)
+                 :highlight (highlight-card! tenant schedule-card)
+                 :unhighlight (unhighlight-card! tenant schedule-card)
                  :reset (reset-card! tenant schedule-card)
                  nil)]
     result))

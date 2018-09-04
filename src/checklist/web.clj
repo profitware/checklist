@@ -15,6 +15,7 @@
             [ring.util.response :as response]
             [hiccup.page :as page]
             [hiccup.util :as util]
+            [timely.core :as timely]
             [cemerick.friend :as friend]
             [cemerick.friend.credentials :as credentials]
             [cemerick.friend.workflows :as workflows]
@@ -30,26 +31,13 @@
 
 (def head
   [:head
-   [:title "Checklist"]
+   [:title (str "Checklist | " *tenant*)]
    [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
    (page/include-css "/css/patternfly.min.css")
    (page/include-css "/css/patternfly-additions.min.css")
    (page/include-css "/css/codemirror.css")
    (page/include-css "/css/mdn-like.css")
-   [:style (str "html {" \newline
-                "  overflow-y: scroll;" \newline
-                "}" \newline
-                ".navbar {" \newline
-                "  margin-bottom: 0;" \newline
-                "}" \newline
-                ".card-disabled {" \newline
-                "  opacity: 0.2;" \newline
-                "  color: #aaaaaa;" \newline
-                "}" \newline
-                ".CodeMirror {" \newline
-                "  border: 1px solid #eee;" \newline
-                "  height: auto;" \newline
-                "}")]])
+   (page/include-css "/css/main.css")])
 
 
 (defmacro menu [page-name page-title & page-href]
@@ -121,16 +109,37 @@
                      [:disabled "disabled"])])]]])
 
 
+(defn get-empty-state [cards]
+  [:div {:class "blank-slate-pf"
+         :id "blank"
+         :style (when-not (reduce (fn [acc card]
+                                    (and acc
+                                         (:card-hidden card)))
+                                  true
+                                  cards)
+                  "display: none;")}
+   [:div {:class "blank-slate-pf-icon"}
+    [:span {:class "pficon pficon pficon-add-circle-o"}]]
+   [:h1 "No Cards for Today"]
+   [:p "Well, it seems that you don't have anything to do for today. Or you just haven't added anything yet."]
+   [:p "In any case, you may perform some actions to check the reasons for this."]
+   [:div {:class "blank-slate-pf-main-action"}
+    [:a {:class "btn btn-primary btn-lg"
+         :href "cards"}
+     "Add Cards"]]
+   [:div {:class "blank-slate-pf-secondary-action"}
+    [:a {:class "btn btn-default"
+         :href "schedule"}
+     "Check Schedules"]]])
+
+
 (defn get-cards [cards]
   [:div {:class "col-xs-12 col-sm-9 cards-content"}
-   [:p {:class "pull-right visible-xs"}
-    [:button {:class "btn btn-primary btn-xs"
-              :type "button"
-              :data-toggle "offcanvas"}
-     "Toggle nav"]]
+   (get-empty-state cards)
    (for [{card-id :card-id
           card-title :card-title
           card-hidden :card-hidden
+          card-highlighted :card-highlighted
           card-checkboxes :card-checkboxes} cards]
      [:div {:class "col-xs-6 col-sm-4 col-md-4"}
       [:div {:class (str "card-pf"
@@ -141,12 +150,22 @@
                                                              (db/get-context-value *tenant* checked))))))
                                        true
                                        card-checkboxes)
-                           " card-disabled"))
+                           " card-disabled")
+                         (when card-highlighted
+                           " card-highlighted"))
              :style (when card-hidden
                       "display: none;")
              :id card-id}
        [:h2 {:class "card-pf-title"}
-        (util/escape-html card-title)]
+        (util/escape-html card-title)
+        [:button {:type "button"
+                  :class "highlight-card"
+                  :aria-label "Highlight"}
+         [:span {:class "pficon pficon-thumb-tack-o"}]]
+        [:button {:type "button"
+                  :class "hide-card close"
+                  :aria-label "Close"}
+         [:span {:class "pficon pficon-close"}]]]
        [:div {:class "card-pf-body"}
         [:form {:class "form-horizontal"}
          (for [{checkbox-id :checkbox-id
@@ -158,12 +177,6 @@
 
 (defn get-editor [page-name]
   [:div {:class "col-xs-12 col-sm-9"}
-   [:p {:class "pull-right visible-xs"}
-    [:button {:class "btn btn-primary btn-xs"
-              :type "button"
-              :data-toggle "offcanvas"}
-     "Toggle nav"]]
-
    (when (.contains [page-cards page-schedule]
                     page-name)
      [:div {:class "alert alert-danger alert-dismissable"
@@ -211,17 +224,28 @@
    [:p {:class "loading-contents"
         :style "display: none;"}
     [:span {:class "spinner spinner-xs spinner-inline"}]
-    "\nWait while job is running"]])
+    "\nWait while job is running"]
+   (when (= page-name page-today)
+     (let [tenant-cards (db/get-cards *tenant*)
+           hidden-tenant-cards (filter :card-hidden tenant-cards)]
+       (when-not (empty? tenant-cards)
+         [:div
+          [:p {:class "hidden-message"
+               :style (when (empty? hidden-tenant-cards)
+                        "display: none;")}
+           (str "The following cards are hidden:")]
+          [:div
+           (for [card tenant-cards]
+             [:button {:class (str "btn btn-default show-card")
+                       :data-card-id (:card-id card)
+                       :style (when-not (:card-hidden card)
+                                "display: none;")
+                       :type "button"}
+              (util/escape-html (:card-title card))])]])))])
 
 
 (defn get-login-form [request]
   [:div {:class "col-xs-12 col-sm-9"}
-   [:p {:class "pull-right visible-xs"}
-    [:button {:class "btn btn-primary btn-xs"
-              :type "button"
-              :data-toggle "offcanvas"}
-     "Toggle nav"]]
-
    (when (get-in request [:params :login_failed])
      [:div {:class "alert alert-danger alert-dismissable"}
       [:button {:type "button"
@@ -268,26 +292,6 @@
                  :class "btn btn-primary"
                  :data-disable-with "Signing in..."}
         "Sign in"]]]]]])
-
-
-(defn get-empty-state [empty-state]
-  [:div {:class "blank-slate-pf"
-         :style (when-not empty-state
-                  "display: none;")
-         :id "blank"}
-   [:div {:class "blank-slate-pf-icon"}
-    [:span {:class "pficon pficon pficon-add-circle-o"}]]
-   [:h1 "No Cards for Today"]
-   [:p "Well, it seems that you don't have anything to do for today. Or you just haven't added anything yet."]
-   [:p "In any case, you may perform some actions to check the reasons for this."]
-   [:div {:class "blank-slate-pf-main-action"}
-    [:a {:class "btn btn-primary btn-lg"
-         :href "cards"}
-     "Add Cards"]]
-   [:div {:class "blank-slate-pf-secondary-action"}
-    [:a {:class "btn btn-default"
-         :href "schedule"}
-     "Check Schedules"]]])
 
 
 (defn get-not-found []
@@ -339,13 +343,7 @@
                      (.contains [page-cards page-schedule] page-name) (get-editor page-name)
                      (= page-name page-login) (get-login-form request)
                      (= page-name page-today) (let [tenant-cards (db/get-cards *tenant*)]
-                                                [:div
-                                                 (get-empty-state (reduce (fn [acc card]
-                                                                            (and acc
-                                                                                 (:card-hidden card)))
-                                                                          true
-                                                                          tenant-cards))
-                                                 (get-cards tenant-cards)])
+                                                (get-cards tenant-cards))
                      :else (get-not-found))
                    (get-sidebar page-name auth)]]
 
@@ -395,13 +393,17 @@
                                     (response/response {:error "Cannot evaluate expression"})))
     :else (let [{input-json :body} request
                 card input-json
-                {checked-ids :checked} card
+                {checked-ids :checked
+                 hide-card :hide
+                 highlight-card :highlight} card
                 old-cards (db/get-cards *tenant*)
                 old-card (first (filter #(= (:card-id %)
                                             (:card-id card))
                                         old-cards))]
             (if old-card
               (let [new-card (assoc old-card
+                                    :card-hidden (boolean hide-card)
+                                    :card-highlighted (boolean highlight-card)
                                     :card-checkboxes (reduce (fn [acc old-checkbox]
                                                                (conj acc (if (:checkbox-disabled old-checkbox)
                                                                            old-checkbox
@@ -466,10 +468,13 @@
      :roles #{::admin}}))
 
 
+(def ^:dynamic *credentials-fn* #'check-credentials)
+
+
 (def app (-> routes
              (json/wrap-json-response)
              (wrap-init-tenant)
-             (friend/authenticate {:workflows [(workflows/interactive-form :credential-fn check-credentials)]})
+             (friend/authenticate {:workflows [(workflows/interactive-form :credential-fn *credentials-fn*)]})
              (anti-forgery/wrap-anti-forgery {:read-token get-custom-token})
              (json/wrap-json-body {:keywords? true :bigdecimals? true})
              (defaults/wrap-defaults (-> defaults/site-defaults
@@ -480,6 +485,11 @@
                                          (assoc :proxy true)))))
 
 
-(defn main []
-  (jetty/run-jetty (reload/wrap-reload #'app)
-                   {:port 5000}))
+(def reloaded-app (reload/wrap-reload #'app))
+
+
+(defn init []
+  (try
+    (timely/start-scheduler)
+    (catch IllegalStateException _
+      nil)))

@@ -79,7 +79,7 @@
 
 (defmacro hide [schedule-card schedule]
   (let [schedule-card-str (str schedule-card)]
-    {:schedule-id (str "schedule-" (hash [schedule-card-str schedule]))
+    {:schedule-id (str "schedule-" (hash [:hide schedule-card-str schedule]))
      :schedule-type :hide
      :schedule-card schedule-card-str
      :schedule schedule}))
@@ -101,6 +101,36 @@
 
 
 (s/fdef show
+        :args (s/cat :schedule-card (s/and symbol?
+                                           ::simple-symbol-or-keyword)
+                     :schedule ::schedule-schedule-spec)
+        :ret ::schedule-spec)
+
+
+(defmacro highlight [schedule-card schedule]
+  (let [schedule-card-str (str schedule-card)]
+    {:schedule-id (str "schedule-" (hash [:highlight schedule-card-str schedule]))
+     :schedule-type :highlight
+     :schedule-card schedule-card-str
+     :schedule schedule}))
+
+
+(s/fdef highlight
+        :args (s/cat :schedule-card (s/and symbol?
+                                           ::simple-symbol-or-keyword)
+                     :schedule ::schedule-schedule-spec)
+        :ret ::schedule-spec)
+
+
+(defmacro unhighlight [schedule-card schedule]
+  (let [schedule-card-str (str schedule-card)]
+    {:schedule-id (str "schedule-" (hash [:unhighlight schedule-card-str schedule]))
+     :schedule-type :unhighlight
+     :schedule-card schedule-card-str
+     :schedule schedule}))
+
+
+(s/fdef unhighlight
         :args (s/cat :schedule-card (s/and symbol?
                                            ::simple-symbol-or-keyword)
                      :schedule ::schedule-schedule-spec)
@@ -166,6 +196,8 @@
 
 (s/def ::schedule-input-spec (s/or :crd (s/cat :cmd (->> ["hide"
                                                           "show"
+                                                          "highlight"
+                                                          "unhighlight"
                                                           "reset"]
                                                          (map symbol)
                                                          set)

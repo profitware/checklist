@@ -10,7 +10,8 @@
             [arohner/lein-docker "0.1.4"]
             [lein-cljfmt "0.6.0"]
             [arohner/lein-docker "0.1.4"]]
-  :ring {:handler checklist.web/app
+  :ring {:handler checklist.web/reloaded-app
+         :init checklist.web/init
          :port 5000
          :nrepl {:start? true
                  :port 9998}}
@@ -38,10 +39,14 @@
                        [parinfer-codemirror "1.4.2"]]
         :root "resources"}
   :resource {:resource-paths
-             [["resources/src" {:includes [#".*(\.min)?\.js(\.map)?"]
-                                :excludes []
-                                :target-path "resources/public/js"
-                                :extra-values {}}]
+             [["resources/src/js" {:includes [#".*(\.min)?\.js(\.map)?"]
+                                   :excludes []
+                                   :target-path "resources/public/js"
+                                   :extra-values {}}]
+              ["resources/src/css" {:includes [#".*(\.min)?\.css(\.map)?"]
+                                    :excludes []
+                                    :target-path "resources/public/css"
+                                    :extra-values {}}]
               ["resources/node_modules/patternfly/dist/js" {:includes [#".*(\.min)?\.js(\.map)?"]
                                                             :excludes []
                                                             :target-path "resources/public/js"

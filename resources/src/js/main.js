@@ -27,7 +27,11 @@ var initApp = function ($, page_name, token, content) {
       alt_pressed = false;
     });
 
-    $('button.close').click(function () { $(this).closest('.alert').hide(); });
+    $('button.close').click(function () {
+      if (!($(this).hasClass('hide-card'))) {
+        $(this).closest('.alert').hide();
+      }
+    });
 
     if (page_name === 'cards' || page_name === 'schedule') {
       var contentCodeMirror = CodeMirror(document.getElementById('codemirror'), {
@@ -72,11 +76,13 @@ var initApp = function ($, page_name, token, content) {
           var card_id = $card_pf.attr('id'),
               cards = data.cards,
               checked_count = 0,
-              card_should_be_hidden = false;
+              card_should_be_hidden = false,
+              card_should_be_highlighted = false;
           if (cards) {
             $(cards).each(function () {
               if (this['card-id'] == card_id) {
                 card_should_be_hidden = this['card-hidden'];
+                card_should_be_highlighted = this['card-highlighted'];
                 $(this['card-checkboxes']).each(function () {
                   var checked_this = this['checkbox-checked'];
                   if (checked_this) {
@@ -92,6 +98,11 @@ var initApp = function ($, page_name, token, content) {
             $card_pf.hide();
           } else {
             $card_pf.show();
+          }
+          if (card_should_be_highlighted) {
+            $card_pf.addClass('card-highlighted');
+          } else {
+            $card_pf.removeClass('card-highlighted');
           }
           if (checked_count == $card_pf.find(checkbox_selector).length) {
             $card_pf.addClass('card-disabled');
@@ -118,12 +129,14 @@ var initApp = function ($, page_name, token, content) {
         };
       };
 
-      $(checkbox_selector).click(function () {
+      var send_card_info = function () {
         var $card_pf = $(this).closest('.card-pf'),
             card_id = $card_pf.attr('id'),
             payload = {
               'token': token,
               'card-id': card_id,
+              'hide': $(this).hasClass('hide-card'),
+              'highlight': $card_pf.hasClass('card-highlighted'),
               'checked': $card_pf.find(checkbox_selector + ':checked').map(function (i, el) {
                 return $(this).attr('name');
               }).get()
@@ -134,6 +147,30 @@ var initApp = function ($, page_name, token, content) {
           data: JSON.stringify(payload),
           contentType: 'application/json'
         }).done(got_data_callback_factory($card_pf));
+      }
+
+      $(checkbox_selector).click(send_card_info);
+
+      $('button.hide-card').click(function () {
+        send_card_info.apply($(this));
+        $('button.show-card[data-card-id="' + $(this).closest('.card-pf').attr('id') + '"]').show();
+        $('p.hidden-message').show();
+      });
+      $('button.show-card').click(function () {
+        var $card_pf = $('div.card-pf#' + $(this).data('card-id'));
+        send_card_info.apply($card_pf);
+        $(this).hide();
+        if ($('button.show-card:visible').length === 0) {
+          $('p.hidden-message').hide();
+        }
+        return false;
+      });
+
+      $('.highlight-card').click(function () {
+        var $card_pf = $(this).closest('.card-pf');
+        $card_pf.toggleClass('card-highlighted');
+        send_card_info.apply($card_pf);
+        return false;
       });
 
       setInterval(function () {
@@ -142,7 +179,7 @@ var initApp = function ($, page_name, token, content) {
           url: page_name + '/ajax',
           contentType: 'application/json'
         }).done(got_data_callback_factory());
-      }, 30 * 1000);
+      }, 10 * 1000);
     }
   });
 };

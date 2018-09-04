@@ -1,0 +1,41 @@
+html {
+    overflow-y: scroll;
+}
+.navbar {
+    margin-bottom: 0;
+}
+
+.card-disabled {
+    opacity: 0.2;
+    color: #aaaaaa;
+}
+.card-highlighted {
+    border: 2px red solid;
+}
+
+.CodeMirror {
+    border: 1px solid #eee;
+    height: auto;
+}
+
+.highlight-card {
+    float: left;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1;
+    color: #000;
+    text-shadow: 0 1px 0 #fff;
+    opacity: .2;
+}
+.highlight-card:focus,.highlight-card:hover {
+    color: #000;
+    text-decoration: none;
+    cursor: pointer;
+    opacity: .5;
+}
+button.highlight-card {
+    cursor: pointer;
+    background: 0 0;
+    border: 0;
+    -webkit-appearance: none;
+}
