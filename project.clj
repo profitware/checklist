@@ -19,6 +19,10 @@
                  [org.clojure/tools.namespace "0.2.11"]
                  [org.clojure/clojure "1.9.0"]
                  [org.clojure/data.codec "0.1.0"]
+                 [org.clojure/tools.logging "0.4.1"]
+                 [org.slf4j/slf4j-simple "1.7.25"]
+                 [cheshire "5.8.0"]
+                 [clj-http "3.9.1"]
                  [ring/ring-jetty-adapter "1.6.3"]
                  [ring/ring-devel "1.6.3"]
                  [ring/ring-json "0.4.0"]
@@ -27,11 +31,16 @@
                  [compojure "1.6.1"]
                  [hiccup "1.0.5"]
                  [cljfmt "0.6.0"]
+                 [org.apache.httpcomponents/httpclient "4.5.3"]
                  [clj-time "0.14.4"]
                  [datascript "0.16.6"]
                  [com.cemerick/friend "0.2.3"]
+                 [clojusc/friend-oauth2 "0.2.0"]
                  [factual/timely "0.0.3"]
                  [environ "1.1.0"]]
+  :jvm-opts ["-Dorg.slf4j.simpleLogger.defaultLogLevel=warn"
+             "-Dorg.slf4j.simpleLogger.showDateTime=true"
+             "-Dorg.slf4j.simpleLogger.showThreadName=false"]
   :npm {:dependencies [[patternfly "3.48.2"]
                        [bootstrap "3.3.7"]
                        [jquery "3.3.1"]
@@ -103,7 +112,10 @@
   :docker {:repo "profitware/checklist"
            :ports {5000 5000}
            :env #{"CHECKLIST_ADMIN_USER"
-                  "CHECKLIST_ADMIN_PASSWORD"}}
+                  "CHECKLIST_ADMIN_PASSWORD"
+                  "CHECKLIST_GITHUB_CLIENT_ID"
+                  "CHECKLIST_GITHUB_SECRET"
+                  "CHECKLIST_DOMAIN"}}
   :main ^:skip-aot checklist.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}})

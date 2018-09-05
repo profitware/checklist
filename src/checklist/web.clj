@@ -19,7 +19,8 @@
             [cemerick.friend :as friend]
             [cemerick.friend.credentials :as credentials]
             [cemerick.friend.workflows :as workflows]
-            [checklist.db :as db])
+            [checklist.db :as db]
+            [checklist.github :as github])
   (:gen-class))
 
 
@@ -73,7 +74,7 @@
    (menu page-logout (str "Logout [" *tenant* "]"))])
 
 
-(defn get-script [page-name auth]
+(defn get-script [page-name]
   [:script (if-let [content (condp = page-name
                               page-cards (db/get-cards-string *tenant*)
                               page-schedule (db/get-schedule-string *tenant*)
@@ -206,7 +207,7 @@
    [:div {:id "codemirror"}]])
 
 
-(defn get-sidebar [page-name auth]
+(defn get-sidebar [page-name]
   [:div {:id "sidebar"
          :class "col-xs-6 col-sm-3 sidebar-offcanvas"}
    (when (.contains [page-cards page-schedule]
@@ -291,7 +292,13 @@
                  :id "submit"
                  :class "btn btn-primary"
                  :data-disable-with "Signing in..."}
-        "Sign in"]]]]]])
+        "Sign in"]
+       " "]
+      (when github/github-client-id
+        [:span
+         [:a {:href "/login/github"
+              :class "btn btn-default"}
+          "Sign in using GitHub"]])]]]])
 
 
 (defn get-not-found []
@@ -345,7 +352,7 @@
                      (= page-name page-today) (let [tenant-cards (db/get-cards *tenant*)]
                                                 (get-cards tenant-cards))
                      :else (get-not-found))
-                   (get-sidebar page-name auth)]]
+                   (get-sidebar page-name)]]
 
                  (when (.contains [page-cards page-schedule]
                                   page-name)
@@ -359,7 +366,7 @@
                  (page/include-js "/js/patternfly.min.js")
                  (page/include-js "/js/patternfly-functions.min.js")
                  (page/include-js "/js/main.js")
-                 (get-script page-name auth)])))
+                 (get-script page-name)])))
 
 
 (defn get-ajax [page-name request]
@@ -461,26 +468,43 @@
     token))
 
 
-(defn- check-credentials [{:keys [username password] :as creds}]
+(defn- simple-credential-fn [{:keys [username password] :as creds}]
   (when (and (= (environ/env :checklist-admin-password) password)
              (= (environ/env :checklist-admin-user) username))
     {:identity username
+     :type :simple
      :roles #{::admin}}))
 
 
-(def ^:dynamic *credentials-fn* #'check-credentials)
+(defn- github-credential-fn
+  [token]
+  (let [access-token (:access-token token)]
+    {:identity (github/github-get-login access-token)
+     :access-token access-token
+     :type :github
+     :roles #{::user}}))
+
+
+(def ^:dynamic *credential-fn* #'simple-credential-fn)
+
+
+(def ^:dynamic *github-credential-fn* #'github-credential-fn)
 
 
 (def app (-> routes
              (json/wrap-json-response)
              (wrap-init-tenant)
-             (friend/authenticate {:workflows [(workflows/interactive-form :credential-fn *credentials-fn*)]})
+             (friend/authenticate {:allow-anon? true
+                                   :workflows (concat (when github/github-client-id
+                                                        [(github/github-workflow :credential-fn *github-credential-fn*)])
+                                                      [(workflows/interactive-form :credential-fn *credential-fn*)])})
              (anti-forgery/wrap-anti-forgery {:read-token get-custom-token})
              (json/wrap-json-body {:keywords? true :bigdecimals? true})
              (defaults/wrap-defaults (-> defaults/site-defaults
                                          (assoc-in [:security :anti-forgery] false)
                                          (assoc-in [:security :ssl-redirect] false)
                                          (assoc-in [:security :hsts] false)
+                                         (assoc-in [:session :cookie-attrs :same-site] :lax)
                                          (assoc-in [:params :multipart] false)
                                          (assoc :proxy true)))))
 

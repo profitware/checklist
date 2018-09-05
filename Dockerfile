@@ -13,7 +13,10 @@ RUN LEIN_SNAPSHOTS_IN_RELEASE=1 lein do deps, resource, ring uberjar
 RUN ln -s $(find /usr/src/checklist/target/uberjar/checklist-*-standalone.jar) checklist.jar
 
 ENV CHECKLIST_ADMIN_USER="admin" \
-    CHECKLIST_ADMIN_PASSWORD=""
+    CHECKLIST_ADMIN_PASSWORD="" \
+    CHECKLIST_GITHUB_CLIENT_ID="" \
+    CHECKLIST_GITHUB_SECRET="" \
+    CHECKLIST_DOMAIN=""
 
 EXPOSE 5000
 
