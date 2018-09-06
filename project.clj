@@ -13,7 +13,7 @@
   :ring {:handler checklist.web/app
          :init checklist.db/init
          :destroy checklist.db/destroy
-         :port 5000
+         :port 8080
          :nrepl {:start? true
                  :port 9998}}
   :dependencies [[org.clojure/clojure "1.9.0"]

@@ -29,9 +29,9 @@
 (def ^:dynamic *tenant* "default")
 
 
-(def head
+(defn get-head []
   [:head
-   [:title (str "Checklist | " *tenant*)]
+   [:title (str "Checklist :: " *tenant*)]
    [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
    (page/include-css "/css/patternfly.min.css")
    (page/include-css "/css/patternfly-additions.min.css")
@@ -309,7 +309,7 @@
 
 (defn get-page [page-name request]
   (let [auth (identity request)]
-    (page/html5 head
+    (page/html5 (get-head)
                 [:body {:class "cards-pf"}
                  [:nav {:class "navbar navbar-inverse"
                         :role "navigation"}
