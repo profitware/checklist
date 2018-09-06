@@ -18,7 +18,6 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /app/checklist
 
-COPY --from=0 /root/.m2 /root/.m2
 COPY --from=0 /usr/src/checklist/target/uberjar/checklist-*-standalone.jar checklist.jar
 
 RUN mkdir /var/lib/checklist; chmod a+rwx /var/lib/checklist

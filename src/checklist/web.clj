@@ -7,7 +7,6 @@
             [ring.middleware.anti-forgery :as anti-forgery]
             [ring.middleware.cookies :as cookies]
             [ring.middleware.params :as params]
-            [ring.middleware.reload :as reload]
             [ring.middleware.session :as session]
             [ring.middleware.json :as json]
             [ring.middleware.defaults :as defaults]
@@ -509,6 +508,3 @@
                                          (assoc-in [:session :cookie-attrs :same-site] :lax)
                                          (assoc-in [:params :multipart] false)
                                          (assoc :proxy true)))))
-
-
-(def reloaded-app (reload/wrap-reload #'app))

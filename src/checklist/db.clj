@@ -2,7 +2,7 @@
   (:require [clojure.tools.logging :as log]
             [cljfmt.core]
             [timely.core :as timely]
-            [environ.core :as environ]
+            [checklist.d :as d]
             [checklist.cards-spec :as cards-spec]
             [checklist.schedule-spec :as schedule-spec]))
 
@@ -13,75 +13,7 @@
     :schedule (schedule-spec/evaluate-expr expression)))
 
 
-(def db-uri (environ/env :checklist-database-uri))
-
-
-(def checklist-schema {:card/id {:db/cardinality :db.cardinality/one
-                                 :db/index true
-                                 :db/unique :db.unique/identity}
-                       :card/symbol {:db/cardinality :db.cardinality/one}
-                       :card/title {:db/cardinality :db.cardinality/one}
-                       :card/tenant {:db/cardinality :db.cardinality/one}
-                       :card/hidden {:db/cardinality :db.cardinality/one}
-                       :card/highlighted {:db/cardinality :db.cardinality/one}
-                       :card/deleted {:db/cardinality :db.cardinality/one}
-                       :cards-string/id {:db/cardinality :db.cardinality/one
-                                         :db/index true
-                                         :db/unique :db.unique/identity}
-                       :cards-string/body {:db/cardinality :db.cardinality/one}
-                       :cards-string/tenant {:db/cardinality :db.cardinality/one}
-                       :checkbox/id {:db/cardinality :db.cardinality/one
-                                     :db/index true
-                                     :db/unique :db.unique/identity}
-                       :checkbox/card-id {:db/cardinality :db.cardinality/one
-                                          :db/valueType :db.type/ref}
-                       :checkbox/id-str {:db/cardinality :db.cardinality/one}
-                       :checkbox/deleted {:db/cardinality :db.cardinality/one}
-                       :checkbox/order {:db/cardinality :db.cardinality/one}
-                       :checkbox/title {:db/cardinality :db.cardinality/one}
-                       :checkbox/disabled {:db/cardinality :db.cardinality/one}
-                       :checkbox/checked {:db/cardinality :db.cardinality/one}
-                       :checkbox/tenant {:db/cardinality :db.cardinality/one}
-                       :schedule-string/id {:db/cardinality :db.cardinality/one
-                                            :db/index true
-                                            :db/unique :db.unique/identity}
-                       :schedule-string/body {:db/cardinality :db.cardinality/one}
-                       :schedule-string/tenant {:db/cardinality :db.cardinality/one}
-                       :schedule/id {:db/cardinality :db.cardinality/one
-                                     :db/index true
-                                     :db/unique :db.unique/identity}
-                       :schedule/id-str {:db/cardinality :db.cardinality/one}
-                       :schedule/deleted {:db/cardinality :db.cardinality/one}
-                       :schedule/schedule-type {:db/cardinality :db.cardinality/one}
-                       :schedule/schedule-card {:db/cardinality :db.cardinality/one}
-                       :schedule/schedule-context {:db/cardinality :db.cardinality/one}
-                       :schedule/schedule-schedule {:db/cardinality (if db-uri
-                                                                      :db.cardinality/many
-                                                                      :db.cardinality/one)}
-                       :schedule/order {:db/cardinality :db.cardinality/one}
-                       :schedule/tenant {:db/cardinality :db.cardinality/one}
-                       :schedule/task-id {:db/cardinality :db.cardinality/one}
-                       :context/id  {:db/cardinality :db.cardinality/one
-                                     :db/index true
-                                     :db/unique :db.unique/identity}
-                       :context/id-str {:db/cardinality :db.cardinality/one}
-                       :context/value {:db/cardinality :db.cardinality/one}
-                       :context/tenant {:db/cardinality :db.cardinality/one}})
-
-
-(if db-uri
-  (require '[datahike.api :as d])
-  (require '[datascript.core :as d]))
-
-
-(def checklist-conn (if db-uri
-                      (eval `(do (try (d/create-database-with-schema ~db-uri ~checklist-schema)
-                                      (catch Exception e#
-                                        (when-not (= (:type (ex-data e#))
-                                                     :db-already-exists)
-                                          (throw e#))))
-                                 (d/connect ~db-uri)))
-                      (eval `(d/create-conn ~checklist-schema))))
+(def checklist-conn (d/get-connection))
 
 
 (defn- get-card-document-id [tenant card]
@@ -575,5 +507,4 @@
     (catch IllegalStateException _
       nil))
 
-  (if db-uri
-    (eval `(d/release ~checklist-conn))))
+  (d/release checklist-conn))
