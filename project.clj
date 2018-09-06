@@ -23,7 +23,7 @@
                  [cheshire "5.8.0"]
                  [clj-http "3.9.1"]
                  [http-kit "2.2.0"]
-                 [ring/ring-core "0.4.0"]
+                 [ring/ring-core "1.6.3"]
                  [ring/ring-json "0.4.0"]
                  [ring/ring-defaults "0.3.2"]
                  [compojure "1.6.1"]
@@ -34,7 +34,8 @@
                  [datascript "0.16.6"]
                  [io.replikativ/datahike "0.1.2"]
                  [com.cemerick/friend "0.2.3"]
-                 [clojusc/friend-oauth2 "0.2.0"]
+                 [clojusc/friend-oauth2 "0.2.0" :exclusions [[ring]
+                                                             [ring/ring-jetty-adapter]]]
                  [factual/timely "0.0.3"]
                  [environ "1.1.0"]]
   :cljfmt {:remove-consecutive-blank-lines? false}
