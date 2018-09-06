@@ -129,6 +129,14 @@ var initApp = function ($, page_name, token, content) {
         };
       };
 
+      var fails_count = 0;
+      var check_on_fail_and_reload = function () {
+        fails_count = fails_count + 1;
+        if (fails_count > 2) {
+          window.location.reload();
+        }
+      };
+
       var send_card_info = function () {
         var $card_pf = $(this).closest('.card-pf'),
             card_id = $card_pf.attr('id'),
@@ -145,8 +153,9 @@ var initApp = function ($, page_name, token, content) {
           type: 'POST',
           url: page_name + '/ajax',
           data: JSON.stringify(payload),
-          contentType: 'application/json'
-        }).done(got_data_callback_factory($card_pf));
+          contentType: 'application/json',
+          timeout: 10 * 1000
+        }).done(got_data_callback_factory($card_pf)).fail(check_on_fail_and_reload);
       }
 
       $(checkbox_selector).click(send_card_info);
@@ -177,9 +186,10 @@ var initApp = function ($, page_name, token, content) {
         $.ajax({
           type: 'GET',
           url: page_name + '/ajax',
-          contentType: 'application/json'
-        }).done(got_data_callback_factory());
-      }, 10 * 1000);
+          contentType: 'application/json',
+          timeout: 10 * 1000
+        }).done(got_data_callback_factory()).fail(check_on_fail_and_reload);
+      }, 15 * 1000);
     }
   });
 };

@@ -7,37 +7,37 @@
             [lein-npm "0.6.2"]
             [lein-resource "16.9.1"]
             [lein-bump-version "0.1.6"]
-            [arohner/lein-docker "0.1.4"]
+            [jonase/eastwood "0.2.5"]
             [lein-cljfmt "0.6.0"]
             [arohner/lein-docker "0.1.4"]]
   :ring {:handler checklist.web/reloaded-app
-         :init checklist.web/init
+         :init checklist.db/init
+         :destroy checklist.db/destroy
          :port 5000
          :nrepl {:start? true
                  :port 9998}}
-  :dependencies [[org.clojure/core.async "0.4.474"]
-                 [org.clojure/tools.namespace "0.2.11"]
-                 [org.clojure/clojure "1.9.0"]
+  :dependencies [[org.clojure/clojure "1.9.0"]
                  [org.clojure/data.codec "0.1.0"]
                  [org.clojure/tools.logging "0.4.1"]
                  [org.slf4j/slf4j-simple "1.7.25"]
                  [cheshire "5.8.0"]
                  [clj-http "3.9.1"]
-                 [ring/ring-jetty-adapter "1.6.3"]
-                 [ring/ring-devel "1.6.3"]
+                 [http-kit "2.2.0"]
+                 [ring/ring-core "0.4.0"]
                  [ring/ring-json "0.4.0"]
                  [ring/ring-defaults "0.3.2"]
-                 [http-kit "2.2.0"]
                  [compojure "1.6.1"]
                  [hiccup "1.0.5"]
                  [cljfmt "0.6.0"]
                  [org.apache.httpcomponents/httpclient "4.5.3"]
                  [clj-time "0.14.4"]
                  [datascript "0.16.6"]
+                 [io.replikativ/datahike "0.1.2"]
                  [com.cemerick/friend "0.2.3"]
                  [clojusc/friend-oauth2 "0.2.0"]
                  [factual/timely "0.0.3"]
                  [environ "1.1.0"]]
+  :cljfmt {:remove-consecutive-blank-lines? false}
   :jvm-opts ["-Dorg.slf4j.simpleLogger.defaultLogLevel=warn"
              "-Dorg.slf4j.simpleLogger.showDateTime=true"
              "-Dorg.slf4j.simpleLogger.showThreadName=false"]
@@ -115,7 +115,9 @@
                   "CHECKLIST_ADMIN_PASSWORD"
                   "CHECKLIST_GITHUB_CLIENT_ID"
                   "CHECKLIST_GITHUB_SECRET"
-                  "CHECKLIST_DOMAIN"}}
+                  "CHECKLIST_DOMAIN"
+                  "CHECKLIST_DATABASE_URI"}}
   :main ^:skip-aot checklist.core
   :target-path "target/%s"
-  :profiles {:uberjar {:aot :all}})
+  :profiles {:uberjar {:aot :all}
+             :dev {:dependencies [[org.clojure/tools.namespace "0.2.11"]]}})

@@ -104,7 +104,7 @@
                    :name checkbox-id
                    :class "form-control"}
                   [(when (checkbox-checked? {:checkbox-checked checkbox-checked
-                                             :checkbox-disabled checkbox-disabled}) 
+                                             :checkbox-disabled checkbox-disabled})
                      [:checked "checked"])
                    (when checkbox-disabled
                      [:disabled "disabled"])])]]])
@@ -135,14 +135,14 @@
 
 
 (defn get-cards [cards]
-  [:div {:class "col-xs-12 col-sm-9 cards-content"}
+  [:div {:class "col-xs-12 col-sm-12 col-md-9 cards-content"}
    (get-empty-state cards)
    (for [{card-id :card-id
           card-title :card-title
           card-hidden :card-hidden
           card-highlighted :card-highlighted
           card-checkboxes :card-checkboxes} cards]
-     [:div {:class "col-xs-6 col-sm-4 col-md-4"}
+     [:div {:class "col-xs-12 col-sm-12 col-md-4"}
       [:div {:class (str "card-pf"
                          (when (reduce (fn [acc checkbox]
                                          (let [checked (get checkbox :checkbox-checked)]
@@ -213,7 +213,7 @@
    (when (.contains [page-cards page-schedule]
                     page-name)
      [:p (str "Press the button below to run or re-run the job. "
-                "Once the job is finished, the contents on the left would be updated.")])
+              "Once the job is finished, the contents on the left would be updated.")])
    (when (= page-name page-cards)
      [:button {:class "btn btn-primary action-button"
                :type "button"}
@@ -237,12 +237,14 @@
            (str "The following cards are hidden:")]
           [:div
            (for [card tenant-cards]
-             [:button {:class (str "btn btn-default show-card")
-                       :data-card-id (:card-id card)
-                       :style (when-not (:card-hidden card)
-                                "display: none;")
-                       :type "button"}
-              (util/escape-html (:card-title card))])]])))])
+             [:span
+              [:button {:class (str "btn btn-default show-card")
+                        :data-card-id (:card-id card)
+                        :style (when-not (:card-hidden card)
+                                 "display: none;")
+                        :type "button"}
+               (util/escape-html (:card-title card))]
+              " "])]])))])
 
 
 (defn get-login-form [request]
@@ -428,7 +430,7 @@
                                                                                            :checkbox-title (util/escape-html (:checkbox-title checkbox)))))
                                                                             []
                                                                             (:card-checkboxes new-card)))]}))
-                                    (response/response {:cards []})))))
+              (response/response {:cards []})))))
 
 
 (defmacro get-routes [page-name & url]
@@ -450,7 +452,7 @@
                                                                (concat (get-routes "cards")
                                                                        (get-routes "schedule")))
                                                         #{::user})
-                                 (friend/logout (compojure/ANY "/logout" request# (response/redirect "/")))                                 
+                                 (friend/logout (compojure/ANY "/logout" request# (response/redirect "/")))
                                  (route/not-found (get-page page-notfound {}))))))
 
 
@@ -510,10 +512,3 @@
 
 
 (def reloaded-app (reload/wrap-reload #'app))
-
-
-(defn init []
-  (try
-    (timely/start-scheduler)
-    (catch IllegalStateException _
-      nil)))
