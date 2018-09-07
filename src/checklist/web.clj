@@ -78,7 +78,8 @@
                               page-cards (db/get-cards-string *tenant*)
                               page-schedule (db/get-schedule-string *tenant*)
                               nil)]
-             (str "initApp($, '" page-name "', '" anti-forgery/*anti-forgery-token* "', `" (clojure.string/replace (util/escape-html content) #"`" "'") "`);")
+             (str "initApp($, '" page-name "', '" anti-forgery/*anti-forgery-token* "', `"
+                  (clojure.string/replace (util/escape-html content) #"`" "'") "`);")
              (str "initApp($, '" page-name "', '" anti-forgery/*anti-forgery-token* "');"))])
 
 
@@ -209,6 +210,19 @@
 (defn get-sidebar [page-name]
   [:div {:id "sidebar"
          :class "col-xs-6 col-sm-3 sidebar-offcanvas"}
+   (when (= page-name page-today)
+     [:div {:class "toast-pf alert alert-warning alert-dismissable"
+            :style "display: none;"}
+      [:button {:type "button"
+                :class "close"
+                :data-dismiss "alert"
+                :aria-hidden "true"}
+       [:span {:class "pficon pficon-close"}]]
+      [:div {:class "pull-right toast-pf-action"}
+       [:a {:href "."}
+        "Reload Page"]]
+      [:span {:class "pficon pficon-warning-triangle-o"}]
+      "Error connecting to server."])
    (when (.contains [page-cards page-schedule]
                     page-name)
      [:p (str "Press the button below to run or re-run the job. "
@@ -371,18 +385,19 @@
 
 
 (defn get-ajax [page-name request]
-  (response/response (if (= page-name page-today)
-                       {:cards (map #(assoc %
-                                            :card-title (util/escape-html (:card-title %))
-                                            :card-checkboxes (reduce (fn [acc checkbox]
-                                                                       (conj acc
-                                                                             (assoc checkbox
-                                                                                    :checkbox-title (util/escape-html (:checkbox-title checkbox))
-                                                                                    :checkbox-checked (checkbox-checked? checkbox))))
-                                                                     []
-                                                                     (:card-checkboxes %)))
-                                    (db/get-cards *tenant*))}
-                       (response/not-found (get-page page-notfound request)))))
+  (let [escape-checkbox-titles (fn [acc checkbox]
+                                 (conj acc
+                                       (assoc checkbox
+                                              :checkbox-title (util/escape-html (:checkbox-title checkbox))
+                                              :checkbox-checked (checkbox-checked? checkbox))))]
+    (response/response (if (= page-name page-today)
+                         {:cards (map #(assoc %
+                                              :card-title (util/escape-html (:card-title %))
+                                              :card-checkboxes (reduce escape-checkbox-titles
+                                                                       []
+                                                                       (:card-checkboxes %)))
+                                      (db/get-cards *tenant*))}
+                         (response/not-found (get-page page-notfound request))))))
 
 
 (defn post-ajax [page-name request]
@@ -407,26 +422,28 @@
                 old-cards (db/get-cards *tenant*)
                 old-card (first (filter #(= (:card-id %)
                                             (:card-id card))
-                                        old-cards))]
+                                        old-cards))
+                change-checkboxes (fn [acc old-checkbox]
+                                    (conj acc (if (:checkbox-disabled old-checkbox)
+                                                old-checkbox
+                                                (assoc old-checkbox
+                                                       :checkbox-checked (.contains checked-ids
+                                                                                    (:checkbox-id old-checkbox))))))
+                escape-checkbox-titles (fn [acc checkbox]
+                                         (conj acc
+                                               (assoc checkbox
+                                                      :checkbox-title (util/escape-html (:checkbox-title checkbox)))))]
             (if old-card
               (let [new-card (assoc old-card
                                     :card-hidden (boolean hide-card)
                                     :card-highlighted (boolean highlight-card)
-                                    :card-checkboxes (reduce (fn [acc old-checkbox]
-                                                               (conj acc (if (:checkbox-disabled old-checkbox)
-                                                                           old-checkbox
-                                                                           (assoc old-checkbox
-                                                                                  :checkbox-checked (.contains checked-ids
-                                                                                                               (:checkbox-id old-checkbox))))))
+                                    :card-checkboxes (reduce change-checkboxes
                                                              []
                                                              (:card-checkboxes old-card)))]
                 (db/upsert-card! *tenant* new-card)
                 (response/response {:cards [(assoc new-card
                                                    :card-title (util/escape-html (:card-title new-card))
-                                                   :card-checkboxes (reduce (fn [acc checkbox]
-                                                                              (conj acc
-                                                                                    (assoc checkbox
-                                                                                           :checkbox-title (util/escape-html (:checkbox-title checkbox)))))
+                                                   :card-checkboxes (reduce escape-checkbox-titles
                                                                             []
                                                                             (:card-checkboxes new-card)))]}))
               (response/response {:cards []})))))

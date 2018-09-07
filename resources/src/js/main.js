@@ -3,7 +3,8 @@ var initApp = function ($, page_name, token, content) {
     var doc = new DOMParser().parseFromString(input, "text/html");
     return doc.documentElement.textContent;
   };
-  $(function () {
+
+  var handleKeyboard = function () {
     var alt_pressed = false;
     $('body').keydown(function (event) {
       if (alt_pressed) {
@@ -26,48 +27,56 @@ var initApp = function ($, page_name, token, content) {
     }).keyup(function (event) {
       alt_pressed = false;
     });
+  };
 
+  var editorPage = function (CodeMirror) {
+    var contentCodeMirror = CodeMirror(document.getElementById('codemirror'), {
+      theme: 'mdn-like',
+      lineNumbers: true,
+      autofocus: true,
+      styleActiveLine: true,
+      matchBrackets: true
+    });
+    contentCodeMirror.setValue(htmlDecode(content));
+    contentCodeMirror.execCommand('goDocEnd');
+    parinferCodeMirror.init(contentCodeMirror);
+    $('.action-button').click(function () {
+      var payload = {'token': token};
+      payload[page_name + '-code'] = contentCodeMirror.getValue();
+      $('.alert-danger').hide();
+      $('.alert-success').hide();
+      $.ajax({
+        type: 'POST',
+        url: page_name + '/ajax',
+        data: JSON.stringify(payload),
+        contentType: 'application/json'
+      }).done(function (data) {
+        if (data[page_name + '-code']) {
+          contentCodeMirror.getValue(data[page_name + '-code']);
+          $('.alert-success').show();
+        } else if (data['error']) {
+          $('.alert-danger').show();
+        }
+      });
+    });
+    contentCodeMirror.setOption('extraKeys', {
+      'Ctrl-Enter': function(cm) {
+        $('.action-button').click();
+      }
+    });
+  };
+
+  $(function () {
     $('button.close').click(function () {
       if (!($(this).hasClass('hide-card'))) {
         $(this).closest('.alert').hide();
       }
     });
 
+    handleKeyboard();
+
     if (page_name === 'cards' || page_name === 'schedule') {
-      var contentCodeMirror = CodeMirror(document.getElementById('codemirror'), {
-        theme: 'mdn-like',
-        lineNumbers: true,
-        autofocus: true,
-        styleActiveLine: true,
-        matchBrackets: true
-      });
-      contentCodeMirror.setValue(htmlDecode(content));
-      contentCodeMirror.execCommand('goDocEnd');
-      parinferCodeMirror.init(contentCodeMirror);
-      $('.action-button').click(function () {
-        var payload = {'token': token};
-        payload[page_name + '-code'] = contentCodeMirror.getValue();
-        $('.alert-danger').hide();
-        $('.alert-success').hide();
-        $.ajax({
-          type: 'POST',
-          url: page_name + '/ajax',
-          data: JSON.stringify(payload),
-          contentType: 'application/json'
-        }).done(function (data) {
-          if (data[page_name + '-code']) {
-            contentCodeMirror.getValue(data[page_name + '-code']);
-            $('.alert-success').show();
-          } else if (data['error']) {
-            $('.alert-danger').show();
-          }
-        });
-      });
-      contentCodeMirror.setOption('extraKeys', {
-        'Ctrl-Enter': function(cm) {
-          $('.action-button').click();
-        }
-      });
+      editorPage(CodeMirror);
     } else {
       var checkbox_selector = 'input[type=\checkbox\]';
 
@@ -126,15 +135,12 @@ var initApp = function ($, page_name, token, content) {
           } else {
             $('div#blank').show();
           }
+          $('div.toast-pf').hide();
         };
       };
 
-      var fails_count = 0;
-      var check_on_fail_and_reload = function () {
-        fails_count = fails_count + 1;
-        if (fails_count > 2) {
-          window.location.reload();
-        }
+      var check_on_fail = function () {
+        $('div.toast-pf').show();
       };
 
       var send_card_info = function () {
@@ -155,7 +161,7 @@ var initApp = function ($, page_name, token, content) {
           data: JSON.stringify(payload),
           contentType: 'application/json',
           timeout: 10 * 1000
-        }).done(got_data_callback_factory($card_pf)).fail(check_on_fail_and_reload);
+        }).done(got_data_callback_factory($card_pf)).fail(check_on_fail);
       }
 
       $(checkbox_selector).click(send_card_info);
@@ -188,7 +194,7 @@ var initApp = function ($, page_name, token, content) {
           url: page_name + '/ajax',
           contentType: 'application/json',
           timeout: 10 * 1000
-        }).done(got_data_callback_factory()).fail(check_on_fail_and_reload);
+        }).done(got_data_callback_factory()).fail(check_on_fail);
       }, 15 * 1000);
     }
   });
