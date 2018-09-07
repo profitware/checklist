@@ -29,7 +29,7 @@ ENV CHECKLIST_ADMIN_USER="admin" \
     CHECKLIST_DOMAIN="" \
     CHECKLIST_DATABASE_URI=""
 
-EXPOSE 5000
+EXPOSE 8080
 
 CMD ["/usr/bin/java", \
      "-Djavax.net.ssl.trustStore=/usr/lib/jvm/java-1.8-openjdk/jre/lib/security/cacerts", \

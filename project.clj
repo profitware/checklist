@@ -118,7 +118,7 @@
                                                           :extra-values {}}]]
              :skip-stencil [ #"resources/node_modules/patternfly/dist/(img|fonts)/.*" ]}
   :docker {:repo "profitware/checklist"
-           :ports {5000 5000}
+           :ports {8080 8080}
            :env #{"CHECKLIST_ADMIN_USER"
                   "CHECKLIST_ADMIN_PASSWORD"
                   "CHECKLIST_GITHUB_CLIENT_ID"
