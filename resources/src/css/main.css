@@ -10,7 +10,7 @@ html {
     color: #aaaaaa;
 }
 .card-highlighted {
-    border: 2px red solid;
+    border: 1px red solid;
 }
 
 .CodeMirror {
