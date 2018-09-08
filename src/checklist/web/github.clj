@@ -1,4 +1,4 @@
-(ns checklist.github
+(ns checklist.web.github
   (:require [environ.core :as environ]
             [cemerick.friend :as friend]
             [friend-oauth2.workflow :as oauth2]
