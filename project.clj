@@ -4,6 +4,7 @@
   :license {:name "MIT"
             :url "https://opensource.org/licenses/MIT"}
   :plugins [[lein-ring "0.12.0"]
+            [lein-openshift "0.1.0"]
             [lein-npm "0.6.2"]
             [lein-resource "16.9.1"]
             [lein-bump-version "0.1.6" :exclusions [rewrite-clj]]
@@ -15,7 +16,7 @@
          :destroy checklist.db/destroy
          :port 8080
          :nrepl {:start? true
-                 :port 9998}}
+                 :port 7888}}
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [org.clojure/core.async "0.4.474"]
                  [org.clojure/data.codec "0.1.0"]
@@ -117,6 +118,16 @@
                                                           :target-path "resources/public/css"
                                                           :extra-values {}}]]
              :skip-stencil [ #"resources/node_modules/patternfly/dist/(img|fonts)/.*" ]}
+  :openshift {:domains ["todo.profitware.tech"]
+              :namespace "checklist"
+              :app "checklist-alpha"
+              :env {"CHECKLIST_ADMIN_USER" nil
+                    "CHECKLIST_ADMIN_PASS" nil
+                    "CHECKLIST_DATABASE_URI" "datahike:file:///var/lib/checklist/data"
+                    "CHECKLIST_DOMAIN" "todo.profitware.tech"
+                    "CHECKLIST_GITHUB_CLIENT_ID" nil
+                    "CHECKLIST_GITHUB_SECRET" nil}
+              :recreate true}
   :docker {:repo "profitware/checklist"
            :ports {8080 8080}
            :env #{"CHECKLIST_ADMIN_USER"
