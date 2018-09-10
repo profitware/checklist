@@ -59,6 +59,7 @@
 
 (defn upsert-card! [tenant card]
   (let [{card-id-symbol :card-id
+         card-order :card-order
          card-title :card-title
          card-checkboxes :card-checkboxes
          card-deleted :card-deleted
@@ -91,6 +92,7 @@
         checkbox-document-id (atom 0)
         upsertion-data (into [] (concat [{:db/id document-id
                                           :card/id-symbol card-id-symbol
+                                          :card/order (or card-order 0)
                                           :card/title card-title
                                           :card/tenant tenant
                                           :card/hidden (or card-hidden false)
@@ -127,11 +129,23 @@
 
 
 (defn get-cards [tenant]
-  (let [card-arguments 5
-        cards (d/q '[:find ?card-id-symbol ?card-title ?card-tenant ?card-hidden ?card-highlighted ?checkbox-order ?checkbox-id-str ?checkbox-title ?checkbox-disabled ?checkbox-checked
+  (let [card-arguments 6
+        cards (d/q '[:find
+                     ?card-id-symbol
+                     ?card-order
+                     ?card-title
+                     ?card-tenant
+                     ?card-hidden
+                     ?card-highlighted
+                     ?checkbox-order
+                     ?checkbox-id-str
+                     ?checkbox-title
+                     ?checkbox-disabled
+                     ?checkbox-checked
                      :in $ ?card-tenant %
                      :where
                      [?card :card/id-symbol ?card-id-symbol]
+                     [?card :card/order ?card-order]
                      [?card :card/title ?card-title]
                      [?card :card/tenant ?card-tenant]
                      [?card :card/hidden ?card-hidden]
@@ -145,20 +159,26 @@
                      [?checkbox :checkbox/disabled ?checkbox-disabled]
                      [?checkbox :checkbox/checked ?checkbox-checked]]
                    @checklist-conn
-                   tenant)]
-    (for [card (group-by (partial take card-arguments) cards)]
-      (let [[[card-id-symbol card-title card-tenant card-hidden card-highlighted] checkboxes] card]
-        {:card-id card-id-symbol
-         :card-title card-title
-         :card-tenant card-tenant
-         :card-hidden card-hidden
-         :card-highlighted card-highlighted
-         :card-checkboxes (for [checkbox (sort-by #(nth % card-arguments) checkboxes)]
-                            (let [[checbox-order checkbox-id-str checkbox-title checkbox-disabled checkbox-checked] (drop card-arguments checkbox)]
-                              {:checkbox-id checkbox-id-str
-                               :checkbox-title checkbox-title
-                               :checkbox-disabled checkbox-disabled
-                               :checkbox-checked checkbox-checked}))}))))
+                   tenant)
+        result-cards (for [card (group-by (partial take card-arguments) cards)]
+                       (let [[[card-id-symbol card-order card-title card-tenant card-hidden card-highlighted] checkboxes] card]
+                         {:card-id card-id-symbol
+                          :card-order (or card-order 0)
+                          :card-title card-title
+                          :card-tenant card-tenant
+                          :card-hidden card-hidden
+                          :card-highlighted card-highlighted
+                          :card-checkboxes (for [checkbox (sort-by #(nth % card-arguments) checkboxes)]
+                                             (let [[checkbox-order
+                                                    checkbox-id-str
+                                                    checkbox-title
+                                                    checkbox-disabled
+                                                    checkbox-checked] (drop card-arguments checkbox)]
+                                               {:checkbox-id checkbox-id-str
+                                                :checkbox-title checkbox-title
+                                                :checkbox-disabled checkbox-disabled
+                                                :checkbox-checked checkbox-checked}))}))]
+    (sort-by :card-order result-cards)))
 
 
 (defn hide-card! [tenant card-id-symbol]
@@ -230,7 +250,8 @@
                                           (cards-spec/evaluate-expr formatted-string)))
         upsertion-data [{:db/id document-id
                          :cards-string/body formatted-string
-                         :cards-string/tenant tenant}]]
+                         :cards-string/tenant tenant}]
+        card-order (atom 0)]
     @(d/transact checklist-conn
                  upsertion-data)
     (loop [[old-card & rest-old-cards] old-cards]
@@ -243,7 +264,8 @@
     (loop [[new-card & rest-new-cards] (vals evaluated-cards-map)]
       (when new-card
         (binding [*drop-old-checkbox-state* false]
-          (upsert-card! tenant new-card)))
+          (upsert-card! tenant (assoc new-card
+                                      :card-order (swap! card-order inc)))))
       (when rest-new-cards
         (recur rest-new-cards)))
     formatted-string))

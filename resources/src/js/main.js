@@ -193,9 +193,9 @@ var initApp = function ($, page_name, token, content) {
           type: 'GET',
           url: page_name + '/ajax',
           contentType: 'application/json',
-          timeout: 10 * 1000
+          timeout: 15 * 1000
         }).done(got_data_callback_factory()).fail(check_on_fail);
-      }, 15 * 1000);
+      }, 30 * 1000);
     }
   });
 };

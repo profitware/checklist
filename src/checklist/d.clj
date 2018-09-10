@@ -8,6 +8,7 @@
 (def checklist-schema {:card/id {:db/cardinality :db.cardinality/one
                                  :db/index true
                                  :db/unique :db.unique/identity}
+                       :card/order {:db/cardinality :db.cardinality/one}
                        :card/symbol {:db/cardinality :db.cardinality/one}
                        :card/title {:db/cardinality :db.cardinality/one}
                        :card/tenant {:db/cardinality :db.cardinality/one}
