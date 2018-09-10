@@ -17,17 +17,29 @@
   (let [web-url (or (first url)
                     (str "/" page-name))
         page-symbol (symbol (str "pages/page-" page-name))]
-    `(concat (list (compojure/GET ~web-url request# (html/get-page ~page-symbol {:auth (identity request#)}))
-                   (compojure/POST (str "/" ~page-name "/ajax") request# (ajax/post-ajax ~page-symbol {:body (:body request#)})))
+    `(concat (list (compojure/GET ~web-url
+                                  request#
+                                  (html/get-page ~page-symbol
+                                                 {:auth (identity request#)}))
+                   (compojure/POST (str "/" ~page-name "/ajax")
+                                   request#
+                                   (ajax/post-ajax ~page-symbol
+                                                   {:body (:body request#)})))
              (when (= ~web-url "/")
-               (list (compojure/GET (str "/" ~page-name "/ajax") request# (ajax/get-ajax ~page-symbol {:body (:body request#)})))))))
+               (list (compojure/GET (str "/" ~page-name "/ajax")
+                                    request#
+                                    (ajax/get-ajax ~page-symbol
+                                                   {:body (:body request#)})))))))
 
 
 (def routes (apply compojure/routes
                    (concat (list (compojure/GET "/favicon.ico" request# "")
-                                 (compojure/GET "/login" request# (html/get-page pages/page-login {:auth (identity request#)
-                                                                                                   :login-failed (get-in request#
-                                                                                                                         [:params :login_failed])})))
+                                 (compojure/GET "/login"
+                                                request#
+                                                (html/get-page pages/page-login
+                                                               {:auth (identity request#)
+                                                                :login-failed (get-in request#
+                                                                                      [:params :login_failed])})))
                            (get-routes "today" "/")
                            (list (route/resources "/")
                                  (friend/wrap-authorize (apply compojure/routes
