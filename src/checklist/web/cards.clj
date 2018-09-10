@@ -61,41 +61,48 @@
   (let [cards (:cards ctx)]
     [:div {:class "col-xs-12 col-sm-12 col-md-9 cards-content"}
      (get-cards-empty-state page-name ctx)
-     (for [{card-id :card-id
-            card-title :card-title
-            card-hidden :card-hidden
-            card-highlighted :card-highlighted
-            card-checkboxes :card-checkboxes} cards]
-       [:div {:class "col-xs-12 col-sm-12 col-md-4"}
-        [:div {:class (str "card-pf"
-                           (when (reduce (fn [acc checkbox]
-                                           (let [checked (get checkbox :checkbox-checked)]
-                                             (and acc (or (= checked true)
-                                                          (and (keyword? checked)
-                                                               (db/get-context-value auth/*tenant*
-                                                                                     checked))))))
-                                         true
-                                         card-checkboxes)
-                             " card-disabled")
-                           (when card-highlighted
-                             " card-highlighted"))
-               :style (when card-hidden
-                        "display: none;")
-               :id card-id}
-         [:h2 {:class "card-pf-title"}
-          (util/escape-html card-title)
-          [:button {:type "button"
-                    :class "highlight-card"
-                    :aria-label "Highlight"}
-           [:span {:class "pficon pficon-thumb-tack-o"}]]
-          [:button {:type "button"
-                    :class "hide-card close"
-                    :aria-label "Close"}
-           [:span {:class "pficon pficon-close"}]]]
-         [:div {:class "card-pf-body"}
-          [:form {:class "form-horizontal"}
-           (for [{checkbox-id :checkbox-id
-                  checkbox-title :checkbox-title
-                  checkbox-checked :checkbox-checked
-                  checkbox-disabled :checkbox-disabled} card-checkboxes]
-             (get-checkbox checkbox-id checkbox-title checkbox-checked checkbox-disabled))]]]])]))
+     (let [cards-pf-divs (for [{card-id :card-id
+                                card-title :card-title
+                                card-hidden :card-hidden
+                                card-highlighted :card-highlighted
+                                card-checkboxes :card-checkboxes} cards]
+                           [:div {:class (str "card-pf"
+                                              (when (reduce (fn [acc checkbox]
+                                                              (let [checked (get checkbox :checkbox-checked)]
+                                                                (and acc (or (= checked true)
+                                                                             (and (keyword? checked)
+                                                                                  (db/get-context-value auth/*tenant*
+                                                                                                        checked))))))
+                                                            true
+                                                            card-checkboxes)
+                                                " card-disabled")
+                                              (when card-highlighted
+                                                " card-highlighted"))
+                                  :style (when card-hidden
+                                           "display: none;")
+                                  :id card-id}
+                            [:h2 {:class "card-pf-title"}
+                             (util/escape-html card-title)
+                             [:button {:type "button"
+                                       :class "highlight-card"
+                                       :aria-label "Highlight"}
+                              [:span {:class "pficon pficon-thumb-tack-o"}]]
+                             [:button {:type "button"
+                                       :class "hide-card close"
+                                       :aria-label "Close"}
+                              [:span {:class "pficon pficon-close"}]]]
+                            [:div {:class "card-pf-body"}
+                             [:form {:class "form-horizontal"}
+                              (for [{checkbox-id :checkbox-id
+                                     checkbox-title :checkbox-title
+                                     checkbox-checked :checkbox-checked
+                                     checkbox-disabled :checkbox-disabled} card-checkboxes]
+                                (get-checkbox checkbox-id checkbox-title checkbox-checked checkbox-disabled))]]])
+           counter (atom 0)
+           piled-cards (vals (group-by (fn [_]
+                                         (mod (swap! counter inc) 3))
+                                       cards-pf-divs))]
+       (for [card-col piled-cards]
+         [:div {:class "col-xs-12 col-sm-12 col-md-4"}
+          (for [card-div card-col]
+            card-div)]))]))
