@@ -125,6 +125,7 @@
                     "CHECKLIST_ADMIN_PASS" nil
                     "CHECKLIST_DATABASE_URI" "datahike:file:///var/lib/checklist/data"
                     "CHECKLIST_DOMAIN" "todo.profitware.tech"
+                    "CHECKLIST_SESSION_KEY" nil
                     "CHECKLIST_GITHUB_CLIENT_ID" nil
                     "CHECKLIST_GITHUB_SECRET" nil}
               :recreate true}
@@ -135,6 +136,7 @@
                   "CHECKLIST_GITHUB_CLIENT_ID"
                   "CHECKLIST_GITHUB_SECRET"
                   "CHECKLIST_DOMAIN"
+                  "CHECKLIST_SESSION_KEY"
                   "CHECKLIST_DATABASE_URI"}}
   :main ^:skip-aot checklist.core
   :target-path "target/%s"

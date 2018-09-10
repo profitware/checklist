@@ -1,11 +1,14 @@
 (ns checklist.web
   (:require [compojure.core :as compojure]
             [compojure.route :as route]
+            [environ.core :as environ]
             [ring.middleware.anti-forgery :as anti-forgery]
             [ring.middleware.json :as json]
             [ring.middleware.defaults :as defaults]
+            [ring.middleware.session.cookie :as cookie]
             [ring.util.response :as response]
             [cemerick.friend :as friend]
+            [checklist.util :as util]
             [checklist.web.ajax :as ajax]
             [checklist.web.auth :as auth]
             [checklist.web.pages :as pages]
@@ -56,6 +59,16 @@
     token))
 
 
+(defn- get-cookie-store-key-options []
+  (when-let [session-key (environ/env :checklist-session-key)]
+    (let [options (if (= (count session-key) 32)
+                    {:key (-> session-key
+                              util/unhexify
+                              byte-array)}
+                    {:key session-key})]
+      options)))
+
+
 (def app (-> routes
              (json/wrap-json-response)
              (auth/wrap-init-tenant)
@@ -68,5 +81,7 @@
                                          (assoc-in [:security :ssl-redirect] false)
                                          (assoc-in [:security :hsts] false)
                                          (assoc-in [:session :cookie-attrs :same-site] :lax)
+                                         (assoc-in [:session :store]
+                                                   (cookie/cookie-store (get-cookie-store-key-options)))
                                          (assoc-in [:params :multipart] false)
                                          (assoc :proxy true)))))
