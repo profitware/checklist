@@ -28,7 +28,7 @@
                                    request#
                                    (ajax/post-ajax ~page-symbol
                                                    {:body (:body request#)})))
-             (when (= ~web-url "/")
+             (when (.contains ["/" "/today"] ~web-url)
                (list (compojure/GET (str "/" ~page-name "/ajax")
                                     request#
                                     (ajax/get-ajax ~page-symbol
@@ -43,10 +43,11 @@
                                                                {:auth (identity request#)
                                                                 :login-failed (get-in request#
                                                                                       [:params :login_failed])})))
-                           (get-routes "today" "/")
+                           (get-routes "index" "/")
                            (list (route/resources "/")
                                  (friend/wrap-authorize (apply compojure/routes
-                                                               (concat (get-routes "cards")
+                                                               (concat (get-routes "today")
+                                                                       (get-routes "cards")
                                                                        (get-routes "schedule")))
                                                         auth/*editor-roles*)
                                  (friend/logout (compojure/ANY "/logout" request# (response/redirect "/")))

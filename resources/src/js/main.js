@@ -10,7 +10,7 @@ var initApp = function ($, page_name, token, content) {
       if (alt_pressed) {
         switch (event.which) {
         case 84:
-          window.location.href = '.';
+          window.location.href = 'today';
           break;
         case 67:
           window.location.href = 'cards';
@@ -26,6 +26,20 @@ var initApp = function ($, page_name, token, content) {
       alt_pressed = (event.which == 18);
     }).keyup(function (event) {
       alt_pressed = false;
+    });
+  };
+
+  var indexPage = function() {
+    $.ajax({
+      type: 'GET',
+      url: page_name + '/ajax',
+      contentType: 'application/json'
+    }).done(function (data) {
+      if (data && data.auth !== 'default') {
+        window.location.href = 'today';
+      } else {
+        $('div.hidden-index').show();
+      }
     });
   };
 
@@ -77,6 +91,8 @@ var initApp = function ($, page_name, token, content) {
 
     if (page_name === 'cards' || page_name === 'schedule') {
       editorPage(CodeMirror);
+    } else if (page_name === 'index') {
+      indexPage();
     } else {
       var checkbox_selector = 'input[type=\checkbox\]';
 

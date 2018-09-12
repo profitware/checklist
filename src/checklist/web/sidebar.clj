@@ -8,8 +8,7 @@
 (defn get-sidebar [page-name ctx]
   [:div {:id "sidebar"
          :class "col-xs-6 col-sm-3 sidebar-offcanvas"}
-   (when (= page-name
-            pages/page-today)
+   (when (.contains [pages/page-today pages/page-index] page-name)
      [:div {:class "toast-pf alert alert-warning alert-dismissable"
             :style "display: none;"}
       [:button {:type "button"
@@ -18,7 +17,7 @@
                 :aria-hidden "true"}
        [:span {:class "pficon pficon-close"}]]
       [:div {:class "pull-right toast-pf-action"}
-       [:a {:href "."}
+       [:a {:href "/"}
         "Reload Page"]]
       [:span {:class "pficon pficon-warning-triangle-o"}]
       "Error connecting to server."])

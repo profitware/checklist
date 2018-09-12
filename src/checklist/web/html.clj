@@ -8,6 +8,7 @@
             [checklist.web.auth :as auth]
             [checklist.web.cards :as cards]
             [checklist.web.editor :as editor]
+            [checklist.web.index :as index]
             [checklist.web.pages :as pages]
             [checklist.web.sidebar :as sidebar]))
 
@@ -24,7 +25,10 @@
 
 
 (defn get-script [page-name ctx]
-  (when-not (= page-name pages/page-login)
+  (if (.contains [pages/page-login pages/page-index]
+                 page-name)
+    (when (= page-name pages/page-index)
+      [:script (str "initApp($, '" page-name "');")])
     [:script (if-let [content (condp = page-name
                                 pages/page-cards (db/get-cards-string auth/*tenant*)
                                 pages/page-schedule (db/get-schedule-string auth/*tenant*)
@@ -53,7 +57,9 @@
                      [:span {:class "icon-bar"}]
                      [:span {:class "icon-bar"}]]
                     [:a {:class "navbar-brand"
-                         :href "/"}
+                         :href (if (= auth/*tenant* "default")
+                                 "/"
+                                 (str "/" pages/page-today))}
                      "Checklist"]]
                    [:div {:id "navbar"
                           :class "collapse navbar-collapse"}
@@ -79,6 +85,7 @@
                      (= page-name pages/page-login) (auth/get-login-form page-name ctx)
                      (= page-name pages/page-today) (let [tenant-cards (db/get-cards auth/*tenant*)]
                                                       (cards/get-cards page-name {:cards tenant-cards}))
+                     (= page-name pages/page-index) (index/get-index-page page-name {})
                      :else (pages/get-not-found page-name {}))
                    (sidebar/get-sidebar page-name ctx)]]
 

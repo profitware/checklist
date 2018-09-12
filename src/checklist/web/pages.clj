@@ -13,6 +13,7 @@
 (def page-today "today")
 (def page-cards "cards")
 (def page-schedule "schedule")
+(def page-index "index")
 (def page-login "login")
 (def page-logout "logout")
 (def page-notfound "notfound")
@@ -20,7 +21,7 @@
 
 (defn get-menu [page-name ctx]
   [:ul {:class "nav navbar-nav navbar-primary"}
-   (menu page-today "Today" "/")
+   (menu page-today "Today")
    (menu page-cards "Cards")
    (menu page-schedule "Schedule")])
 

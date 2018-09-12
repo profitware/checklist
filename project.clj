@@ -7,6 +7,7 @@
             [lein-openshift "0.1.0"]
             [lein-npm "0.6.2"]
             [lein-resource "16.9.1"]
+            [lein-ring-extract-static "0.1.0"]
             [lein-bump-version "0.1.6" :exclusions [rewrite-clj]]
             [jonase/eastwood "0.2.5"]
             [lein-cljfmt "0.6.0" :exclusions [org.clojure/tools.reader]]
@@ -16,7 +17,8 @@
          :destroy checklist.db/destroy
          :port 8080
          :nrepl {:start? true
-                 :port 7888}}
+                 :port 7888}
+         :static {"/" "index.html"}}
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [org.clojure/core.async "0.4.474"]
                  [org.clojure/data.codec "0.1.0"]
@@ -65,6 +67,10 @@
                                     :excludes []
                                     :target-path "resources/public/css"
                                     :extra-values {}}]
+              ["resources/src" {:includes [#".*\.txt"]
+                                :excludes []
+                                :target-path "resources/public"
+                                :extra-values {}}]
               ["resources/node_modules/patternfly/dist/js" {:includes [#".*(\.min)?\.js(\.map)?"]
                                                             :excludes []
                                                             :target-path "resources/public/js"
@@ -118,7 +124,7 @@
                                                           :target-path "resources/public/css"
                                                           :extra-values {}}]]
              :skip-stencil [ #"resources/node_modules/patternfly/dist/(img|fonts)/.*" ]}
-  :openshift {:domains ["todo.profitware.tech"]
+  :openshift {:domains {"todo.profitware.tech" ["/index" "/today" "/cards" "/schedule"]}
               :namespace "checklist"
               :app "checklist-alpha"
               :env {"CHECKLIST_ADMIN_USER" nil
@@ -129,6 +135,10 @@
                     "CHECKLIST_GITHUB_CLIENT_ID" nil
                     "CHECKLIST_GITHUB_SECRET" nil}
               :recreate true}
+  :release-tasks [["deps"]
+                  ["resource"]
+                  ["oc" "release"]
+                  ["ring-extract-static"]]
   :docker {:repo "profitware/checklist"
            :ports {8080 8080}
            :env #{"CHECKLIST_ADMIN_USER"
