@@ -63,7 +63,7 @@
                      "Checklist"]]
                    [:div {:id "navbar"
                           :class "collapse navbar-collapse"}
-                    (pages/get-menu page-name {})
+                    (pages/get-menu page-name ctx)
                     (if (friend/authorized? auth/*editor-roles* auth)
                       (pages/get-menu-logout page-name {})
                       (pages/get-menu-login page-name {}))]]]

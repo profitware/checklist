@@ -1,5 +1,6 @@
 (ns checklist.web.pages
-  (:require [checklist.web.auth :as auth]))
+  (:require [cemerick.friend :as friend]
+            [checklist.web.auth :as auth]))
 
 
 (defmacro menu [page-name page-title & page-href]
@@ -20,10 +21,13 @@
 
 
 (defn get-menu [page-name ctx]
-  [:ul {:class "nav navbar-nav navbar-primary"}
-   (menu page-today "Today")
-   (menu page-cards "Cards")
-   (menu page-schedule "Schedule")])
+  (let [auth (:auth ctx)]
+    [:ul {:class "nav navbar-nav navbar-primary"}
+     (menu page-today "Today")
+     (when (friend/authorized? auth/*editor-roles* auth)
+       (menu page-cards "Cards"))
+     (when (friend/authorized? auth/*editor-roles* auth)
+       (menu page-schedule "Schedule"))]))
 
 
 (defn get-menu-login [page-name ctx]

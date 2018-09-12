@@ -135,10 +135,11 @@
                     "CHECKLIST_GITHUB_CLIENT_ID" nil
                     "CHECKLIST_GITHUB_SECRET" nil}
               :recreate true}
-  :release-tasks [["deps"]
+  :release-tasks [["clean"]
+                  ["deps"]
                   ["resource"]
-                  ["oc" "release"]
-                  ["ring-extract-static"]]
+                  ["ring-extract-static"]
+                  ["oc" "release"]]
   :docker {:repo "profitware/checklist"
            :ports {8080 8080}
            :env #{"CHECKLIST_ADMIN_USER"

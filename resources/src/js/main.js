@@ -40,6 +40,8 @@ var initApp = function ($, page_name, token, content) {
       } else {
         $('div.hidden-index').show();
       }
+    }).fail(function () {
+      $('div.hidden-index').show();
     });
   };
 

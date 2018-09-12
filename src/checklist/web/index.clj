@@ -3,7 +3,8 @@
 
 
 (defn get-index-page [page-name ctx]
-  [:div {:class "col-xs-12 col-sm-9 hidden-index"}
+  [:div {:class "col-xs-12 col-sm-9 hidden-index"
+         :style "display: none;"}
    [:div {:class "jumbotron"}
     [:h1 "Welcome to Checklist!"]
     [:div {:style "padding-top: 3em;"}]
