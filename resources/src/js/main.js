@@ -36,7 +36,7 @@ var initApp = function ($, page_name, token, content) {
       contentType: 'application/json'
     }).done(function (data) {
       if (data && data.auth !== 'default') {
-        window.location.href = 'today';
+        window.location.href = data.next ? data.next : 'today';
       } else {
         $('div.hidden-index').show();
       }
@@ -125,8 +125,14 @@ var initApp = function ($, page_name, token, content) {
           }
           if (card_should_be_hidden) {
             $card_pf.hide();
+            $('button.show-card[data-card-id="' + $card_pf.attr('id') + '"]').show();
+            $('p.hidden-message').show();
           } else {
             $card_pf.show();
+            $('button.show-card[data-card-id="' + $card_pf.attr('id') + '"]').hide();
+            if ($('button.show-card:visible').length === 0) {
+              $('p.hidden-message').hide();
+            }
           }
           if (card_should_be_highlighted) {
             $card_pf.addClass('card-highlighted');

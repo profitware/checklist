@@ -21,7 +21,9 @@
                                                                                                       []
                                                                                                       (:card-checkboxes %)))
                                                                      (db/get-cards auth/*tenant*))}))
-    (= page-name pages/page-index) (response/response {:auth auth/*tenant*})
+    (= page-name pages/page-index) (response/response (merge {:auth auth/*tenant*}
+                                                             (when-let [next-page (:next ctx)]
+                                                               {:next next-page})))
     :else (response/not-found (html/get-page pages/page-notfound ctx))))
 
 

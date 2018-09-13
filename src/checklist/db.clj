@@ -280,10 +280,23 @@
                           @checklist-conn
                           tenant))]
     (or body
-        (str "(defcard sample-card \"Sample Card\"" \newline
+        (str "(defcard sample-card \"Sample card\"" \newline
              "  (check \"Hello, world\")" \newline
              "  (auto \"Always checked!\" true)" \newline
-             "  (auto \"Blinking!\" :blink))" \newline))))
+             "  (auto \"Blinking!\" :blink))" \newline
+             \newline
+             "(defcard highlighted \"Highlighted card\"" \newline
+             "  (check \"Test checkbox\"))" \newline
+             \newline
+             "(defcard hidden \"Hidden card\"" \newline
+             "  (check \"First checkbox\")" \newline
+             "  (check \"Second checkbox\"))" \newline
+             \newline
+             "(defcard odd-card \"Shown on odd days\"" \newline
+             "  (check \"Some checkbox\"))" \newline
+             \newline
+             "(defcard even-card \"Shown on even days\"" \newline
+             "  (check \"Some other checkbox\"))" \newline))))
 
 
 (defn get-context-value [tenant context-id-str]
@@ -474,7 +487,19 @@
                           tenant))]
     (or body
         (str "(reset sample-card (each-minute))" \newline
-             "(toggle :blink (each-minute))" \newline))))
+             "(toggle :blink (each-minute))" \newline
+             \newline
+             "(highlight highlighted (each-minute))" \newline
+             \newline
+             "(hide hidden (each-minute))" \newline
+             \newline
+             "(show odd-card (on-days-of-week [:mon :wed :fri :sun]))" \newline
+             "(hide odd-card (on-days-of-week [:tue :thu :sat]))" \newline
+             "(reset odd-card (on-days-of-week [:tue :thu :sat]))" \newline
+             \newline
+             "(show even-card (on-days-of-week [:tue :thu :sat]))" \newline
+             "(hide even-card (on-days-of-week [:mon :wed :fri :sun]))" \newline
+             "(reset even-card (on-days-of-week [:mon :wed :fri :sun]))" \newline))))
 
 
 (defn get-all-schedule-tenants []

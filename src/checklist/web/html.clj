@@ -10,6 +10,7 @@
             [checklist.web.editor :as editor]
             [checklist.web.index :as index]
             [checklist.web.pages :as pages]
+            [checklist.web.profile :as profile]
             [checklist.web.sidebar :as sidebar]))
 
 
@@ -90,6 +91,7 @@
                      (= page-name pages/page-today) (let [tenant-cards (db/get-cards auth/*tenant*)]
                                                       (cards/get-cards page-name {:cards tenant-cards}))
                      (= page-name pages/page-index) (index/get-index-page page-name {})
+                     (= page-name pages/page-profile) (profile/get-profile-page page-name {})
                      (= page-name pages/page-too-many-requests) (pages/get-too-many-requests page-name {})
                      :else (pages/get-not-found page-name {}))
                    (sidebar/get-sidebar page-name ctx)]]

@@ -23,13 +23,18 @@
 
 
 (defn get-menu [page-name ctx]
-  (let [auth (:auth ctx)]
-    [:ul {:class "nav navbar-nav navbar-primary"}
-     (menu page-today "Today")
-     (when (friend/authorized? auth/*editor-roles* auth)
-       (menu page-cards "Cards"))
-     (when (friend/authorized? auth/*editor-roles* auth)
-       (menu page-schedule "Schedule"))]))
+  (let [auth (:auth ctx)
+        next (:next ctx)]
+    (if (= next "profile")
+      [:ul {:class "nav navbar-nav navbar-primary"}
+       (when (friend/authorized? auth/*editor-roles* auth)
+         (menu page-profile "Profile"))]
+      [:ul {:class "nav navbar-nav navbar-primary"}
+       (menu page-today "Today")
+       (when (friend/authorized? auth/*editor-roles* auth)
+         (menu page-cards "Cards"))
+       (when (friend/authorized? auth/*editor-roles* auth)
+         (menu page-schedule "Schedule"))])))
 
 
 (defn get-menu-login [page-name ctx]
