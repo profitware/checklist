@@ -3,4 +3,4 @@
             [checklist.web :as web]))
 
 
-(def reloaded-app (reload/wrap-reload #'web/app))
+(def reloaded-app (reload/wrap-reload (web/get-app)))

@@ -18,6 +18,7 @@
 (def page-login "login")
 (def page-logout "logout")
 (def page-notfound "notfound")
+(def page-too-many-requests "too-many-requests")
 
 
 (defn get-menu [page-name ctx]
@@ -43,3 +44,8 @@
 (defn get-not-found [page-name ctx]
   [:div {:class "blank-slate-pf"}
    [:h1 "Page not found"]])
+
+
+(defn get-too-many-requests [page-name ctx]
+  [:div {:class "blank-slate-pf"}
+   [:h1 "Too many requests"]])

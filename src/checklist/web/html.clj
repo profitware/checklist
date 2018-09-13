@@ -15,8 +15,11 @@
 
 (defn get-head [page-name ctx]
   [:head
-   [:title (str "Checklist :: " auth/*tenant*)]
    [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
+   [:meta {:charset "UTF-8"}]
+   [:link {:rel "shortcut icon"
+           :href "/img/favicon.png"}]
+   [:title (str "Checklist :: " auth/*tenant*)]
    (page/include-css "/css/patternfly.min.css")
    (page/include-css "/css/patternfly-additions.min.css")
    (page/include-css "/css/codemirror.css")
@@ -40,7 +43,8 @@
 
 (defn get-page [page-name ctx]
   (let [auth (:auth ctx)]
-    (page/html5 (get-head page-name {})
+    (page/html5 {:lang "en"}
+                (get-head page-name {})
                 [:body {:class "cards-pf"}
                  [:nav {:class "navbar navbar-inverse"
                         :role "navigation"}
@@ -86,6 +90,7 @@
                      (= page-name pages/page-today) (let [tenant-cards (db/get-cards auth/*tenant*)]
                                                       (cards/get-cards page-name {:cards tenant-cards}))
                      (= page-name pages/page-index) (index/get-index-page page-name {})
+                     (= page-name pages/page-too-many-requests) (pages/get-too-many-requests page-name {})
                      :else (pages/get-not-found page-name {}))
                    (sidebar/get-sidebar page-name ctx)]]
 

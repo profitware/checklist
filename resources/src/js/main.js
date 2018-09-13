@@ -95,6 +95,8 @@ var initApp = function ($, page_name, token, content) {
       editorPage(CodeMirror);
     } else if (page_name === 'index') {
       indexPage();
+    } else if (page_name === 'too-many-requests' || page_name === 'login' || page_name === 'not-found') {
+      // Nothing to do here
     } else {
       var checkbox_selector = 'input[type=\checkbox\]';
 

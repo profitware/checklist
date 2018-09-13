@@ -30,6 +30,7 @@
                  [ring/ring-jetty-adapter "1.6.3"]
                  [ring/ring-json "0.4.0"]
                  [ring/ring-defaults "0.3.2"]
+                 [ring-ratelimit "0.2.2"]
                  [compojure "1.6.1" :exclusions [ring/ring-codec]]
                  [hiccup "1.0.5"]
                  [cljfmt "0.6.0" :exclusions [rewrite-cljs]]
@@ -66,6 +67,10 @@
               ["resources/src/css" {:includes [#".*(\.min)?\.css(\.map)?"]
                                     :excludes []
                                     :target-path "resources/public/css"
+                                    :extra-values {}}]
+              ["resources/src/img" {:includes [#".*\.png"]
+                                    :excludes []
+                                    :target-path "resources/public/img"
                                     :extra-values {}}]
               ["resources/src" {:includes [#".*\.txt"]
                                 :excludes []
@@ -123,8 +128,9 @@
                                                           :excludes []
                                                           :target-path "resources/public/css"
                                                           :extra-values {}}]]
-             :skip-stencil [ #"resources/node_modules/patternfly/dist/(img|fonts)/.*" ]}
-  :openshift {:domains {"todo.profitware.tech" ["/index" "/today" "/cards" "/schedule"]}
+             :skip-stencil [#"resources/node_modules/patternfly/dist/(img|fonts)/.*"
+                            #"resources/src/img/.*"]}
+  :openshift {:domains {"todo.profitware.tech" ["/index" "/today" "/cards" "/schedule" "/login" "/logout"]}
               :namespace "checklist"
               :app "checklist-alpha"
               :env {"CHECKLIST_ADMIN_USER" nil
@@ -133,7 +139,10 @@
                     "CHECKLIST_DOMAIN" "todo.profitware.tech"
                     "CHECKLIST_SESSION_KEY" nil
                     "CHECKLIST_GITHUB_CLIENT_ID" nil
-                    "CHECKLIST_GITHUB_SECRET" nil}
+                    "CHECKLIST_GITHUB_SECRET" nil
+                    "CHECKLIST_RATELIMIT_IP" "10"
+                    "CHECKLIST_RATELIMIT_ANONYMOUS" "200"
+                    "CHECKLIST_RATELIMIT_USER" "600"}
               :recreate true}
   :release-tasks [["clean"]
                   ["deps"]
@@ -148,7 +157,10 @@
                   "CHECKLIST_GITHUB_SECRET"
                   "CHECKLIST_DOMAIN"
                   "CHECKLIST_SESSION_KEY"
-                  "CHECKLIST_DATABASE_URI"}}
+                  "CHECKLIST_DATABASE_URI"
+                  "CHECKLIST_RATELIMIT_IP"
+                  "CHECKLIST_RATELIMIT_ANONYMOUS"
+                  "CHECKLIST_RATELIMIT_USER"}}
   :main ^:skip-aot checklist.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}

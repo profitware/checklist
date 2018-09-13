@@ -6,6 +6,8 @@
             [ring.middleware.json :as json]
             [ring.middleware.defaults :as defaults]
             [ring.middleware.session.cookie :as cookie]
+            [ring.middleware.ratelimit :as ratelimit]
+            [ring.middleware.ratelimit.limits :as limits]
             [ring.util.response :as response]
             [cemerick.friend :as friend]
             [checklist.util :as util]
@@ -36,8 +38,7 @@
 
 
 (def routes (apply compojure/routes
-                   (concat (list (compojure/GET "/favicon.ico" request# "")
-                                 (compojure/GET "/login"
+                   (concat (list (compojure/GET "/login"
                                                 request#
                                                 (html/get-page pages/page-login
                                                                {:auth (identity request#)
@@ -70,19 +71,67 @@
       options)))
 
 
-(def app (-> routes
-             (json/wrap-json-response)
-             (auth/wrap-init-tenant)
-             (friend/authenticate {:allow-anon? true
-                                   :workflows (auth/get-workflows)})
-             (anti-forgery/wrap-anti-forgery {:read-token get-custom-token})
-             (json/wrap-json-body {:keywords? true :bigdecimals? true})
-             (defaults/wrap-defaults (-> defaults/site-defaults
-                                         (assoc-in [:security :anti-forgery] false)
-                                         (assoc-in [:security :ssl-redirect] false)
-                                         (assoc-in [:security :hsts] false)
-                                         (assoc-in [:session :cookie-attrs :same-site] :lax)
-                                         (assoc-in [:session :store]
-                                                   (cookie/cookie-store (get-cookie-store-key-options)))
-                                         (assoc-in [:params :multipart] false)
-                                         (assoc :proxy true)))))
+(defn too-many-requests-handler [request]
+  (if (.endsWith (:uri request) "/ajax")
+    {:status 429
+     :headers {"Content-Type" "application/json"}
+     :body "{\"error\": \"Too many requests\"}"}
+    {:status 429
+     :headers {"Content-Type" "text/html"}
+     :body (html/get-page pages/page-too-many-requests {})}))
+
+
+(defn- wrap-limit-cookie [limit cookie]
+  (merge limit
+         {:key-prefix (str (:key-prefix limit) "C" cookie)
+          :filter #(and (get-in % [:cookies cookie]) ((:filter limit) %))
+          :getter #(str (get-in % [:cookies cookie]) ((:getter limit) %))}))
+
+
+(defn- cookie-limit [cookie n] (-> n limits/limit (wrap-limit-cookie cookie)))
+
+
+(defn- get-env-int [environ-key default]
+  (if-let [value-string (re-find #"\d+" (environ/env environ-key (str default)))]
+    (Integer. value-string)
+    default))
+
+
+(def ^:dynamic *limit-cookie-name* "__cfduid")
+(def ^:dynamic *limit-ip* (get-env-int :checklist-ratelimit-ip 200))
+(def ^:dynamic *limit-anonymous* (get-env-int :checklist-ratelimit-anonymous 200))
+(def ^:dynamic *limit-user* (get-env-int :checklist-ratelimit-user 600))
+
+
+
+(defn get-app []
+  (-> routes
+      (json/wrap-json-response)
+      (auth/wrap-init-tenant)
+      (ratelimit/wrap-ratelimit {:limits [(-> *limit-user*
+                                              limits/limit
+                                              limits/wrap-limit-user
+                                              (wrap-limit-cookie *limit-cookie-name*)
+                                              limits/wrap-limit-ip)
+                                          (-> *limit-anonymous*
+                                              limits/limit
+                                              (wrap-limit-cookie *limit-cookie-name*)
+                                              limits/wrap-limit-ip)
+                                          (ratelimit/ip-limit *limit-ip*)]
+                                 :err-handler too-many-requests-handler})
+      (friend/authenticate {:allow-anon? true
+                            :workflows (auth/get-workflows)})
+      (anti-forgery/wrap-anti-forgery {:read-token get-custom-token})
+      (json/wrap-json-body {:keywords? true :bigdecimals? true})
+      (defaults/wrap-defaults (-> defaults/site-defaults
+                                  (assoc-in [:security :anti-forgery] false)
+                                  (assoc-in [:security :ssl-redirect] false)
+                                  (assoc-in [:security :hsts] false)
+                                  (assoc-in [:session :cookie-attrs :same-site] :lax)
+                                  (assoc-in [:session :store]
+                                            (cookie/cookie-store (get-cookie-store-key-options)))
+                                  (assoc-in [:params :multipart] false)
+                                  (assoc :proxy true)))))
+
+
+(def app (get-app))
