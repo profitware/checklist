@@ -18,41 +18,51 @@
   (:gen-class))
 
 
-(defmacro get-routes [page-name & url]
-  (let [web-url (or (first url)
+(def ^:dynamic *next-page* nil)
+
+
+(defn- get-routes [page-name & [url]]
+  (let [web-url (or url
                     (str "/" page-name))
-        page-symbol (symbol (str "pages/page-" page-name))]
-    `(concat (list (compojure/GET ~web-url
+        page-symbol (eval (symbol (str "checklist.web.pages/page-" page-name)))]
+    (concat (list (compojure/GET web-url
+                                 request#
+                                 (html/get-page page-symbol
+                                                {:auth (identity request#)
+                                                 :next *next-page*}))
+                  (compojure/POST (str "/" page-name "/ajax")
                                   request#
-                                  (html/get-page ~page-symbol
-                                                 {:auth (identity request#)}))
-                   (compojure/POST (str "/" ~page-name "/ajax")
+                                  (ajax/post-ajax page-symbol
+                                                  {:body (:body request#)})))
+            (when (.contains ["/" "/today"] web-url)
+              (list (compojure/GET (str "/" page-name "/ajax")
                                    request#
-                                   (ajax/post-ajax ~page-symbol
-                                                   {:body (:body request#)})))
-             (when (.contains ["/" "/today"] ~web-url)
-               (list (compojure/GET (str "/" ~page-name "/ajax")
-                                    request#
-                                    (ajax/get-ajax ~page-symbol
-                                                   {:body (:body request#)})))))))
+                                   (ajax/get-ajax page-symbol
+                                                  {:body (:body request#)})))))))
 
 
-(def routes (apply compojure/routes
-                   (concat (list (compojure/GET "/login"
-                                                request#
-                                                (html/get-page pages/page-login
-                                                               {:auth (identity request#)
-                                                                :login-failed (get-in request#
-                                                                                      [:params :login_failed])})))
-                           (get-routes "index" "/")
-                           (list (route/resources "/")
-                                 (friend/wrap-authorize (apply compojure/routes
-                                                               (concat (get-routes "today")
-                                                                       (get-routes "cards")
-                                                                       (get-routes "schedule")))
-                                                        auth/*editor-roles*)
-                                 (friend/logout (compojure/ANY "/logout" request# (response/redirect "/")))
-                                 (route/not-found (html/get-page pages/page-notfound {}))))))
+(defn- authorized-routes [routes not-found-action]
+  (list (route/resources "/")
+        (friend/wrap-authorize (apply compojure/routes
+                                      routes)
+                               auth/*editor-roles*)
+        (friend/logout (compojure/ANY "/logout" request# (response/redirect "/")))
+        (route/not-found not-found-action)))
+
+
+(defn- get-final-routes []
+  (apply compojure/routes
+         (concat (list (compojure/GET "/login"
+                                      request#
+                                      (html/get-page pages/page-login
+                                                     {:auth (identity request#)
+                                                      :login-failed (get-in request#
+                                                                            [:params :login_failed])})))
+                 (get-routes "index" "/")
+                 (authorized-routes (concat (get-routes "today")
+                                            (get-routes "cards")
+                                            (get-routes "schedule"))
+                                    (html/get-page pages/page-notfound {})))))
 
 
 (defn- get-custom-token [request]
@@ -71,7 +81,7 @@
       options)))
 
 
-(defn too-many-requests-handler [request]
+(defn- too-many-requests-handler [request]
   (if (.endsWith (:uri request) "/ajax")
     {:status 429
      :headers {"Content-Type" "application/json"}
@@ -103,11 +113,38 @@
 (def ^:dynamic *limit-user* (get-env-int :checklist-ratelimit-user 600))
 
 
+(def ^:dynamic *unskippable-check-function* nil)
+
+
+(defn- wrap-unskippable-page [handler {:keys [check-function route-names default-route]}]
+  (let [routes (reduce (fn [acc route-name]
+                         (concat acc
+                                 (if (sequential? route-name)
+                                   (get-routes (first route-name) (second route-name))
+                                   (get-routes route-name))))
+                       []
+                       route-names)
+        default-route (or default-route
+                          (first route-names))]
+    (fn [request]
+      (if (and (friend/authorized? auth/*editor-roles* (friend/identity request))
+               check-function
+               (check-function request))
+        (let [x (apply (apply compojure/routes (authorized-routes routes
+                                                                  (response/redirect (str "/" default-route))))
+                       [(assoc request
+                               :uri (str "/" default-route))])]
+          x)
+        (handler request)))))
+
 
 (defn get-app []
-  (-> routes
+  (-> (get-final-routes)
       (json/wrap-json-response)
       (auth/wrap-init-tenant)
+      (wrap-unskippable-page {:check-function (fn [request]
+                                                false)
+                              :route-names ["profile"]})
       (ratelimit/wrap-ratelimit {:limits [(-> *limit-user*
                                               limits/limit
                                               limits/wrap-limit-user

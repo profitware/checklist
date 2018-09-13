@@ -19,6 +19,7 @@
 (def page-logout "logout")
 (def page-notfound "notfound")
 (def page-too-many-requests "too-many-requests")
+(def page-profile "profile")
 
 
 (defn get-menu [page-name ctx]
