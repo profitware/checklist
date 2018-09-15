@@ -4,10 +4,10 @@
   :license {:name "MIT"
             :url "https://opensource.org/licenses/MIT"}
   :plugins [[lein-ring "0.12.0"]
-            [lein-openshift "0.1.0"]
+            [lein-openshift "0.1.1"]
             [lein-npm "0.6.2"]
             [lein-resource "16.9.1"]
-            [lein-ring-extract-static "0.1.0"]
+            [lein-ring-extract-static "0.1.1"]
             [lein-bump-version "0.1.6" :exclusions [rewrite-clj]]
             [jonase/eastwood "0.2.5"]
             [lein-cljfmt "0.6.0" :exclusions [org.clojure/tools.reader]]
@@ -133,6 +133,7 @@
   :openshift {:domains {"todo.profitware.tech" ["/index" "/today" "/cards" "/schedule" "/login" "/logout"]}
               :namespace "checklist"
               :app "checklist-alpha"
+              :static "checklist-static"
               :env {"CHECKLIST_ADMIN_USER" nil
                     "CHECKLIST_ADMIN_PASS" nil
                     "CHECKLIST_DATABASE_URI" "datahike:file:///var/lib/checklist/data"
@@ -147,8 +148,9 @@
   :release-tasks [["clean"]
                   ["deps"]
                   ["resource"]
+                  ["oc" "release"]
                   ["ring-extract-static"]
-                  ["oc" "release"]]
+                  ["ring-build-static" "push"]]
   :docker {:repo "profitware/checklist"
            :ports {8080 8080}
            :env #{"CHECKLIST_ADMIN_USER"
