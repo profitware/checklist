@@ -83,6 +83,12 @@
     (apply #'datascript.core/q args)))
 
 
+(defn pull [& args]
+  (if *db-uri*
+    (apply #'datahike.api/pull args)
+    (apply #'datascript.core/pull args)))
+
+
 (defn pull-many [& args]
   (if *db-uri*
     (apply #'datahike.api/pull-many args)
